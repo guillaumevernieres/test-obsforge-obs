@@ -32,35 +32,36 @@ The application now integrates with the official JCB-GDAS (JEDI Configuration Bu
 
 ## Usage
 
-### Basic Usage with JCB-GDAS Templates
+### Generate 3DVAR Configuration
 
 ```bash
 python example_jcb.py
 ```
 
-This will generate a 3DVAR configuration using the official JCB-GDAS marine observation templates.
-
-### Custom Templates
-
-```bash
-python example.py
-```
-
-This uses the original custom template approach.
+This generates a JEDI 3DVAR configuration using the official JCB-GDAS marine observation templates and example observations from `config/example_observations_jcb.yaml`.
 
 ### Command Line Interface
 
 ```bash
 python src/marine_obs_config.py --template template_name.yaml.j2 \
                                 --observations obs_list.yaml \
+                                --context context.yaml \
                                 --output config.yaml
 ```
 
+### Custom Template Development
+
+For advanced users who need to create custom observation templates:
+
+```bash
+python example.py
+```
+
+This demonstrates using custom templates from the `templates/` directory.
+
 ## Configuration Format
 
-### JCB-GDAS Format (Recommended)
-
-Observations should be specified in YAML format:
+Observations are specified in YAML format using the JCB-GDAS template system. Each observation type corresponds to a specific template in the JCB-GDAS repository:
 
 ```yaml
 observations:
@@ -81,19 +82,18 @@ observations:
     output_suffix: _out.nc
 ```
 
-### Legacy Format
+### Supported Marine Observation Types
 
-```yaml
-observations:
-  - type: sea_surface_temperature
-    file: data/sst_obs.nc
-    variables:
-      - seaSurfaceTemperature
-    observation_operator: Identity
-    obs_error:
-      covariance_model: diagonal
-      standard_deviation: 0.5
-```
+The application automatically maps observation types to JCB-GDAS templates. Currently supported types include:
+
+- `sst_generic` - Sea Surface Temperature (generic satellite sensors)
+- `insitu_temp_profile_argo` - Argo temperature profiles
+- `insitu_salt_profile_argo` - Argo salinity profiles
+- `adt_rads_all` - Altimeter data (multi-mission)
+- `sss_smap_l2` - SMAP Sea Surface Salinity
+- `sss_smos_l2` - SMOS Sea Surface Salinity
+
+See `config/example_observations_jcb.yaml` for a complete example.
 
 ## Requirements
 

@@ -1,48 +1,28 @@
-# Example marine observations configuration
-# This file contains example observations for testing the marine 3DVAR system
+# Example marine observations configuration for CUSTOM TEMPLATE development
+# This file demonstrates the format for developing custom Jinja templates
+# For production use, prefer the JCB-GDAS format in example_observations_jcb.yaml
 
 observations:
-  - type: sea_surface_temperature
-    file: data/sst_obs_20240101.nc
-    variables:
-      - sea_surface_temperature
-    observation_operator: Identity
-    obs_error:
-      covariance_model: diagonal
-      standard_deviation: 0.5
+  - type: sst_generic
+    input_path: ./data/marine
+    input_prefix: ""
+    input_suffix: .nc
+    output_path: ./output/marine
+    output_prefix: "diag_"
+    output_suffix: _out.nc
 
-  - type: sea_surface_salinity
-    file: data/sss_obs_20240101.nc
-    variables:
-      - sea_surface_salinity
-    observation_operator: Identity
-    obs_error:
-      covariance_model: diagonal
-      standard_deviation: 0.1
+  - type: insitu_temp_profile_argo
+    input_path: ./data/marine
+    input_prefix: ""
+    input_suffix: .nc
+    output_path: ./output/marine
+    output_prefix: "diag_"
+    output_suffix: _out.nc
 
-  - type: sea_level_anomaly
-    file: data/sla_obs_20240101.nc
-    variables:
-      - sea_level_anomaly
-    observation_operator: Identity
-    obs_error:
-      covariance_model: diagonal
-      standard_deviation: 0.03
-
-  - type: temperature_profile
-    file: data/temp_profile_obs_20240101.nc
-    variables:
-      - ocean_temperature
-    observation_operator: VerticalInterp
-    obs_error:
-      covariance_model: diagonal
-      standard_deviation: 0.8
-
-  - type: salinity_profile
-    file: data/salt_profile_obs_20240101.nc
-    variables:
-      - ocean_salinity
-    observation_operator: VerticalInterp
-    obs_error:
-      covariance_model: diagonal
-      standard_deviation: 0.2
+  - type: adt_rads_all
+    input_path: ./data/marine
+    input_prefix: ""
+    input_suffix: .nc
+    output_path: ./output/marine
+    output_prefix: "diag_"
+    output_suffix: _out.nc

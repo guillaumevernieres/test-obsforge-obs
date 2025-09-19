@@ -9,7 +9,7 @@ lists using Jinja2 templates from the JCB-GDAS repository.
 import yaml
 import jinja2
 from pathlib import Path
-from typing import Dict, List, Any, Optional
+from typing import Dict, List, Any, Optional, Union
 import logging
 
 
@@ -73,7 +73,11 @@ class JCBGDASTemplateManager:
         """
         available_templates = self.list_available_templates()
 
-        # Direct mapping for common observation types
+        # For GFS v17 format, try exact match first (preferred)
+        if obs_type in available_templates:
+            return obs_type
+
+        # Direct mapping for common observation types (legacy support)
         type_mapping = {
             'sea_surface_temperature': 'sst_generic',
             'sea_surface_salinity': 'sss_smap_l2',
@@ -88,13 +92,13 @@ class JCBGDASTemplateManager:
             'sss': 'sss_smap_l2'
         }
 
-        # Try exact match first
+        # Try exact match in mapping
         if obs_type in type_mapping:
             template_name = type_mapping[obs_type]
             if template_name in available_templates:
                 return template_name
 
-        # Try partial matches
+        # Try partial matches (fallback)
         obs_type_lower = obs_type.lower()
         for template in available_templates:
             template_lower = template.lower()
@@ -110,30 +114,22 @@ class JCBGDASTemplateManager:
 class MarineObsConfigGenerator:
     """Generator for JEDI 3DVAR configuration files from marine obs."""
 
-    def __init__(self, template_dir: str = "templates",
-                 jcb_gdas_path: str = "jcb-gdas"):
+    def __init__(self, jcb_gdas_path: str = "jcb-gdas"):
         """
         Initialize the configuration generator.
 
         Args:
-            template_dir: Directory containing custom Jinja2 templates
             jcb_gdas_path: Path to the JCB-GDAS repository
         """
-        self.template_dir = Path(template_dir)
         self.jcb_manager = JCBGDASTemplateManager(jcb_gdas_path)
 
-        # Set up Jinja environment for both custom and JCB templates
-        loaders = []
-        if self.template_dir.exists():
-            loaders.append(jinja2.FileSystemLoader(self.template_dir))
-
+        # Set up Jinja environment for JCB templates only
         jcb_loader = jinja2.FileSystemLoader(
             self.jcb_manager.marine_templates_path
         )
-        loaders.append(jcb_loader)
 
         self.env = jinja2.Environment(
-            loader=jinja2.ChoiceLoader(loaders),
+            loader=jcb_loader,
             trim_blocks=True,
             lstrip_blocks=True
         )
@@ -169,27 +165,41 @@ class MarineObsConfigGenerator:
 
         return processed_obs
 
-    def generate_config_from_jcb(self, obs_list: List[Dict[str, Any]],
+    def generate_config_from_jcb(self,
+                                 obs_list: List[Union[str, Dict[str, Any]]],
                                  additional_context: Optional[Dict[str, Any]] = None,  # noqa: E501
                                  output_file: Optional[str] = None) -> str:
         """
         Generate JEDI 3DVAR configuration using JCB-GDAS templates.
 
         Args:
-            obs_list: List of marine observations
+            obs_list: List of marine observations (strings or dicts)
             additional_context: Additional context variables for templates
             output_file: Optional output file path
 
         Returns:
             Generated YAML configuration as string
         """
-        if not self.validate_observations(obs_list, for_jcb=True):
+        # Convert observations to consistent format
+        normalized_obs = []
+        for obs in obs_list:
+            if isinstance(obs, str):
+                # Simple string format: "sst_viirs_npp_l3u"
+                normalized_obs.append({'type': obs})
+            elif isinstance(obs, dict):
+                # Dictionary format: {"type": "sst_viirs_npp_l3u", ...}
+                normalized_obs.append(obs)
+            else:
+                self.logger.warning(f"Skipping invalid observation: {obs}")
+                continue
+
+        if not self.validate_observations(normalized_obs):
             raise ValueError("Invalid observation list format")
 
         # Generate individual observation configurations
         obs_configs = []
 
-        for obs in obs_list:
+        for obs in normalized_obs:
             obs_type = obs.get('type', 'unknown')
             template_name = self.jcb_manager.match_observation_to_template(
                 obs_type)
@@ -334,80 +344,28 @@ class MarineObsConfigGenerator:
 
         return config
 
-    def generate_config(self,
-                        template_name: str,
-                        obs_list: List[Dict[str, Any]],
-                        additional_context: Optional[Dict[str, Any]] = None,
-                        output_file: Optional[str] = None) -> str:
+    def validate_observations(self, obs_list: List[Union[str, Dict[str, Any]]]) -> bool:
         """
-        Generate JEDI 3DVAR configuration YAML from observations and template.
+        Validate observation list format.
 
         Args:
-            template_name: Name of the Jinja2 template file
-            obs_list: List of marine observations
-            additional_context: Additional context variables for template
-            output_file: Optional output file path
-
-        Returns:
-            Generated YAML configuration as string
-        """
-        try:
-            template = self.env.get_template(template_name)
-        except jinja2.TemplateNotFound:
-            raise FileNotFoundError(f"Template {template_name} not found in {self.template_dir}")
-
-        # Prepare template context
-        context = self.load_observations(obs_list)
-        if additional_context:
-            context.update(additional_context)
-
-        # Render template
-        rendered_config = template.render(**context)
-
-        # Validate YAML
-        try:
-            yaml.safe_load(rendered_config)
-        except yaml.YAMLError as e:
-            self.logger.error(f"Generated configuration is not valid YAML: {e}")
-            raise
-
-        # Save to file if specified
-        if output_file:
-            output_path = Path(output_file)
-            output_path.parent.mkdir(parents=True, exist_ok=True)
-            with open(output_path, 'w') as f:
-                f.write(rendered_config)
-            self.logger.info(f"Configuration saved to {output_path}")
-
-        return rendered_config
-
-    def validate_observations(self, obs_list: List[Dict[str, Any]],
-                              for_jcb: bool = False) -> bool:
-        """
-        Validate observation list format and required fields.
-
-        Args:
-            obs_list: List of observation dictionaries
-            for_jcb: Whether validating for JCB-GDAS format
+            obs_list: List of observation types (strings or dicts)
 
         Returns:
             True if observations are valid
         """
-        if for_jcb:
-            required_fields = ['type']  # JCB format just needs type
-        else:
-            required_fields = ['type', 'file', 'variables']  # Original format
-
         for i, obs in enumerate(obs_list):
-            if not isinstance(obs, dict):
-                self.logger.error(f"Observation {i} is not a dictionary")
-                return False
-
-            for field in required_fields:
-                if field not in obs:
-                    msg = f"Observation {i} missing required field: {field}"
-                    self.logger.error(msg)
+            if isinstance(obs, str):
+                # Simple string format is always valid
+                continue
+            elif isinstance(obs, dict):
+                # Dictionary format must have 'type' field
+                if 'type' not in obs:
+                    self.logger.error(f"Observation {i} missing 'type' field")
                     return False
+            else:
+                self.logger.error(f"Observation {i} must be string or dict")
+                return False
 
         return True
 

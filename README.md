@@ -4,17 +4,15 @@ This application processes obsForge-generated marine observations through a low-
 
 ## Features
 
-- Configuration YAML generation for JEDI 3DVAR from observation lists
-- Jinja template-based configuration management using JCB-GDAS templates
+- JEDI 3DVAR configuration generation from marine observation lists
+- Integration with official JCB-GDAS templates from NOAA-EMC
+- Support for GFS v17 observation list format
+- Automatic template matching for marine observation types
 - Marine observation processing for retrospective experiments
-- Integration with NOAA-EMC/jcb-gdas repository for official JEDI templates
-- Automatic template matching for different marine observation types
-- YAML-based configuration for improved readability and consistency
 
 ## Structure
 
 - `src/` - Main application source code
-- `templates/` - Custom Jinja templates for configuration generation
 - `config/` - Configuration files and examples
 - `tests/` - Unit tests
 - `data/` - Sample data and observations
@@ -38,62 +36,52 @@ The application now integrates with the official JCB-GDAS (JEDI Configuration Bu
 python example_jcb.py
 ```
 
-This generates a JEDI 3DVAR configuration using the official JCB-GDAS marine observation templates and example observations from `config/example_observations_jcb.yaml`.
+This generates a JEDI 3DVAR configuration using the official JCB-GDAS marine observation templates and example observations from `config/example_obs_list.yaml`.
 
 ### Command Line Interface
 
 ```bash
-python src/marine_obs_config.py --template template_name.yaml.j2 \
-                                --observations obs_list.yaml \
+python src/marine_obs_config.py --obs-list obs_list.yaml \
                                 --context context.yaml \
                                 --output config.yaml
 ```
 
-### Custom Template Development
-
-For advanced users who need to create custom observation templates:
-
-```bash
-python example.py
-```
-
-This demonstrates using custom templates from the `templates/` directory.
-
 ## Configuration Format
 
-Observations are specified in YAML format using the JCB-GDAS template system. Each observation type corresponds to a specific template in the JCB-GDAS repository:
+Observations are specified as a simple list of observation type names in YAML format. Each observation type corresponds to a specific template in the JCB-GDAS repository:
 
 ```yaml
 observations:
-  - type: sst_generic
-    input_path: ./data/marine
-    input_prefix: ""
-    input_suffix: .nc
-    output_path: ./output/marine
-    output_prefix: "diag_"
-    output_suffix: _out.nc
+# ADT (Altimeter Data)
+- rads_adt_3a
+- rads_adt_j3
 
-  - type: insitu_temp_profile_argo
-    input_path: ./data/marine
-    input_prefix: ""
-    input_suffix: .nc
-    output_path: ./output/marine
-    output_prefix: "diag_"
-    output_suffix: _out.nc
+# SSS (Sea Surface Salinity)
+- sss_smap_l2
+- sss_smos_l2
+
+# SST (Sea Surface Temperature)
+- sst_viirs_npp_l3u
+- sst_avhrrf_ma_l3u
+
+# In situ
+- insitu_temp_profile_argo
+- insitu_salt_profile_argo
 ```
+
+This format matches the GFS v17 observation list format and is much simpler than specifying detailed configuration parameters - the JCB-GDAS templates contain all the necessary details.
 
 ### Supported Marine Observation Types
 
 The application automatically maps observation types to JCB-GDAS templates. Currently supported types include:
 
-- `sst_generic` - Sea Surface Temperature (generic satellite sensors)
-- `insitu_temp_profile_argo` - Argo temperature profiles
-- `insitu_salt_profile_argo` - Argo salinity profiles
-- `adt_rads_all` - Altimeter data (multi-mission)
-- `sss_smap_l2` - SMAP Sea Surface Salinity
-- `sss_smos_l2` - SMOS Sea Surface Salinity
+- **Altimeter Data**: `rads_adt_3a`, `rads_adt_3b`, `rads_adt_6a`, `rads_adt_c2`, `rads_adt_j2`, `rads_adt_j3`, `rads_adt_sa`, `rads_adt_sw`
+- **Sea Surface Salinity**: `sss_smap_l2`, `sss_smos_l2`
+- **Sea Surface Temperature**: `sst_viirs_n21_l3u`, `sst_viirs_n20_l3u`, `sst_viirs_npp_l3u`, `sst_avhrrf_ma_l3u`, `sst_avhrrf_mb_l3u`, `sst_avhrrf_mc_l3u`
+- **Sea Ice**: `icec_amsr2_north`, `icec_amsr2_south`
+- **In Situ**: `insitu_temp_profile_argo`, `insitu_salt_profile_argo`, `insitu_temp_surface_drifter`
 
-See `config/example_observations_jcb.yaml` for a complete example.
+See `config/example_obs_list.yaml` for a complete example.
 
 ## Requirements
 

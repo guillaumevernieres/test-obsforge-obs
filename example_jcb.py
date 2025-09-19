@@ -18,10 +18,7 @@ def main():
     """Run example configuration generation with JCB-GDAS templates."""
 
     # Initialize the generator with JCB-GDAS support
-    generator = MarineObsConfigGenerator(
-        template_dir="templates",
-        jcb_gdas_path="jcb-gdas"
-    )
+    generator = MarineObsConfigGenerator(jcb_gdas_path="jcb-gdas")
 
     print("Available JCB-GDAS Marine Templates:")
     print("=" * 40)
@@ -33,7 +30,7 @@ def main():
     print()
 
     # Load observations from YAML file
-    with open("config/example_observations_jcb.yaml", 'r') as f:
+    with open("config/example_obs_list.yaml", 'r') as f:
         obs_data = yaml.safe_load(f)
         observations = obs_data['observations']
 
@@ -55,7 +52,7 @@ def main():
     }
 
     print("Generating JEDI 3DVAR configuration with JCB-GDAS templates...")
-    print(f"Using {len(observations)} marine observations")
+    print(f"Using {len(observations)} marine observation types")
 
     try:
         # Generate configuration using JCB-GDAS templates
@@ -71,8 +68,7 @@ def main():
         # Display template matching information
         print("\nTemplate Matching:")
         print("-" * 20)
-        for obs in observations:
-            obs_type = obs['type']
+        for obs_type in observations:
             template = generator.jcb_manager.match_observation_to_template(
                 obs_type)
             if template:

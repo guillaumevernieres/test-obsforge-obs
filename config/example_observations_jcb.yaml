@@ -1,0 +1,43 @@
+# JCB-GDAS format marine observations configuration
+# This file contains examples using the JCB-GDAS template format
+
+observations:
+  - type: sst_generic
+    input_path: ./data/marine
+    input_prefix: ""
+    input_suffix: .nc
+    output_path: ./output/marine
+    output_prefix: "diag_"
+    output_suffix: _out.nc
+
+  - type: insitu_temp_profile_argo
+    input_path: ./data/marine
+    input_prefix: ""
+    input_suffix: .nc
+    output_path: ./output/marine
+    output_prefix: "diag_"
+    output_suffix: _out.nc
+
+  - type: adt_rads_all
+    input_path: ./data/marine
+    input_prefix: ""
+    input_suffix: .nc
+    output_path: ./output/marine
+    output_prefix: "diag_"
+    output_suffix: _out.nc
+
+  - type: sss_smap_l2
+    input_path: ./data/marine
+    input_prefix: ""
+    input_suffix: .nc
+    output_path: ./output/marine
+    output_prefix: "diag_"
+    output_suffix: _out.nc
+
+  - type: insitu_salt_profile_argo
+    input_path: ./data/marine
+    input_prefix: ""
+    input_suffix: .nc
+    output_path: ./output/marine
+    output_prefix: "diag_"
+    output_suffix: _out.nc

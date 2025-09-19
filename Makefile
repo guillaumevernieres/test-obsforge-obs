@@ -37,11 +37,12 @@ example-jcb:
 
 # Run linting
 lint:
-	python -m flake8 src/ tests/ example.py example_jcb.py --max-line-length=79
+	python -m flake8 src/ tests/ example.py example_jcb.py explore_templates.py --max-line-length=79
 
 # Clean generated files
 clean:
 	rm -f config/generated_*.yaml
+	rm -f config/example_observations.json
 	rm -rf __pycache__/
 	rm -rf src/__pycache__/
 	rm -rf tests/__pycache__/

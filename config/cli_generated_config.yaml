@@ -1,0 +1,147 @@
+# JEDI 3DVAR Configuration Template for Marine Observations
+# This is a placeholder template - please provide your actual Jinja2 template
+
+cost_function:
+  cost_type: 3D-Var
+  window_begin: "2024-01-01T00:00:00Z"
+  window_length: "PT6H"
+
+  # Background term
+  background:
+    type: ensemble
+    date: "2024-01-01T00:00:00Z"
+    members from template:
+      template:
+        filename: "background_%mem%.nc"
+      pattern: '%mem%'
+      nmembers: "20"
+
+  # Model configuration
+  model:
+    name: "MOM6"
+    tstep: "PT1H"
+    model variables: &model_vars
+      - ocean_temperature
+      - ocean_salinity
+      - sea_surface_height
+      - ocean_u_velocity
+      - ocean_v_velocity
+
+  # Observations
+  observations:
+    observers:
+    # sea_surface_temperature observations
+    - obs space:
+        name: "sea_surface_temperature"
+        obsdatain:
+          engine:
+            type: H5File
+            obsfile: "data/sst_obs_20240101.nc"
+        obsdataout:
+          engine:
+            type: H5File
+            obsfile: "data/sst_obs_20240101_out.nc"
+        simulated variables: ['sea_surface_temperature']
+      obs operator:
+        name: "Identity"
+      obs error:
+        covariance model: "diagonal"
+        variance:
+          sea_surface_temperature: 0.25
+      obs filters: []
+    # sea_surface_salinity observations
+    - obs space:
+        name: "sea_surface_salinity"
+        obsdatain:
+          engine:
+            type: H5File
+            obsfile: "data/sss_obs_20240101.nc"
+        obsdataout:
+          engine:
+            type: H5File
+            obsfile: "data/sss_obs_20240101_out.nc"
+        simulated variables: ['sea_surface_salinity']
+      obs operator:
+        name: "Identity"
+      obs error:
+        covariance model: "diagonal"
+        variance:
+          sea_surface_salinity: 0.010000000000000002
+      obs filters: []
+    # sea_level_anomaly observations
+    - obs space:
+        name: "sea_level_anomaly"
+        obsdatain:
+          engine:
+            type: H5File
+            obsfile: "data/sla_obs_20240101.nc"
+        obsdataout:
+          engine:
+            type: H5File
+            obsfile: "data/sla_obs_20240101_out.nc"
+        simulated variables: ['sea_level_anomaly']
+      obs operator:
+        name: "Identity"
+      obs error:
+        covariance model: "diagonal"
+        variance:
+          sea_level_anomaly: 0.0009
+      obs filters: []
+    # temperature_profile observations
+    - obs space:
+        name: "temperature_profile"
+        obsdatain:
+          engine:
+            type: H5File
+            obsfile: "data/temp_profile_obs_20240101.nc"
+        obsdataout:
+          engine:
+            type: H5File
+            obsfile: "data/temp_profile_obs_20240101_out.nc"
+        simulated variables: ['ocean_temperature']
+      obs operator:
+        name: "VerticalInterp"
+      obs error:
+        covariance model: "diagonal"
+        variance:
+          ocean_temperature: 0.6400000000000001
+      obs filters: []
+    # salinity_profile observations
+    - obs space:
+        name: "salinity_profile"
+        obsdatain:
+          engine:
+            type: H5File
+            obsfile: "data/salt_profile_obs_20240101.nc"
+        obsdataout:
+          engine:
+            type: H5File
+            obsfile: "data/salt_profile_obs_20240101_out.nc"
+        simulated variables: ['ocean_salinity']
+      obs operator:
+        name: "VerticalInterp"
+      obs error:
+        covariance model: "diagonal"
+        variance:
+          ocean_salinity: 0.04000000000000001
+      obs filters: []
+
+# Variational configuration
+variational:
+  minimizer:
+    algorithm: DRIPCG
+  iterations:
+  - ninner: 10
+    gradient_norm_reduction: 1e-10
+    test: on
+    geometry:
+      nml_file_in: "input.nml"
+      fields metadata: "fields_metadata.yaml"
+
+# Output configuration
+output:
+  filetype: cube
+  datadir: "./output"
+  filename: "marine_analysis.nc"
+  first: PT0H
+  frequency: PT6H

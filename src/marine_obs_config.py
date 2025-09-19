@@ -415,26 +415,37 @@ class MarineObsConfigGenerator:
 def main():
     """Main entry point for the configuration generator."""
     import argparse
-    import json
 
-    parser = argparse.ArgumentParser(description="Generate JEDI 3DVAR configuration from marine observations")
-    parser.add_argument("--template", required=True, help="Jinja2 template file name")
-    parser.add_argument("--observations", required=True, help="JSON file containing observation list")
-    parser.add_argument("--output", required=True, help="Output YAML configuration file")
-    parser.add_argument("--context", help="Additional JSON context file")
-    parser.add_argument("--template-dir", default="templates", help="Template directory")
+    parser = argparse.ArgumentParser(
+        description="Generate JEDI 3DVAR configuration from marine obs"
+    )
+    parser.add_argument("--template", required=True,
+                        help="Jinja2 template file name")
+    parser.add_argument("--observations", required=True,
+                        help="YAML file containing observation list")
+    parser.add_argument("--output", required=True,
+                        help="Output YAML configuration file")
+    parser.add_argument("--context",
+                        help="Additional YAML context file")
+    parser.add_argument("--template-dir", default="templates",
+                        help="Template directory")
 
     args = parser.parse_args()
 
     # Load observations
     with open(args.observations, 'r') as f:
-        obs_list = json.load(f)
+        obs_data = yaml.safe_load(f)
+        # Handle both formats: list or dict with 'observations' key
+        if isinstance(obs_data, list):
+            obs_list = obs_data
+        else:
+            obs_list = obs_data.get('observations', [])
 
     # Load additional context if provided
     additional_context = {}
     if args.context:
         with open(args.context, 'r') as f:
-            additional_context = json.load(f)
+            additional_context = yaml.safe_load(f)
 
     # Generate configuration
     generator = MarineObsConfigGenerator(args.template_dir)
@@ -442,7 +453,7 @@ def main():
     if not generator.validate_observations(obs_list):
         raise ValueError("Invalid observation list format")
 
-    config = generator.generate_config(
+    generator.generate_config(
         args.template,
         obs_list,
         additional_context,

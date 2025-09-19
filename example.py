@@ -6,7 +6,7 @@ configuration generator.
 
 import sys
 import os
-import json
+import yaml
 
 # Add src to path
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), 'src'))
@@ -21,8 +21,9 @@ def main():
     generator = MarineObsConfigGenerator(template_dir="templates")
 
     # Load example observations
-    with open("config/example_observations.json", 'r') as f:
-        observations = json.load(f)
+    with open("config/example_observations.yaml", 'r') as f:
+        obs_data = yaml.safe_load(f)
+        observations = obs_data['observations']
 
     # Additional context for the template
     context = {

@@ -9,6 +9,7 @@ This application processes obsForge-generated marine observations through a low-
 - Marine observation processing for retrospective experiments
 - Integration with NOAA-EMC/jcb-gdas repository for official JEDI templates
 - Automatic template matching for different marine observation types
+- YAML-based configuration for improved readability and consistency
 
 ## Structure
 
@@ -51,7 +52,7 @@ This uses the original custom template approach.
 
 ```bash
 python src/marine_obs_config.py --template template_name.yaml.j2 \
-                                --observations obs_list.json \
+                                --observations obs_list.yaml \
                                 --output config.yaml
 ```
 
@@ -59,33 +60,39 @@ python src/marine_obs_config.py --template template_name.yaml.j2 \
 
 ### JCB-GDAS Format (Recommended)
 
-Observations should be specified with the following format:
+Observations should be specified in YAML format:
 
-```json
-[
-  {
-    "type": "sst_generic",
-    "input_path": "./data/marine",
-    "input_prefix": "",
-    "input_suffix": ".nc",
-    "output_path": "./output/marine",
-    "output_prefix": "diag_",
-    "output_suffix": "_out.nc"
-  }
-]
+```yaml
+observations:
+  - type: sst_generic
+    input_path: ./data/marine
+    input_prefix: ""
+    input_suffix: .nc
+    output_path: ./output/marine
+    output_prefix: "diag_"
+    output_suffix: _out.nc
+
+  - type: insitu_temp_profile_argo
+    input_path: ./data/marine
+    input_prefix: ""
+    input_suffix: .nc
+    output_path: ./output/marine
+    output_prefix: "diag_"
+    output_suffix: _out.nc
 ```
 
 ### Legacy Format
 
-```json
-[
-  {
-    "type": "sea_surface_temperature",
-    "file": "data/sst_obs.nc",
-    "variables": ["seaSurfaceTemperature"],
-    "observation_operator": "Identity"
-  }
-]
+```yaml
+observations:
+  - type: sea_surface_temperature
+    file: data/sst_obs.nc
+    variables:
+      - seaSurfaceTemperature
+    observation_operator: Identity
+    obs_error:
+      covariance_model: diagonal
+      standard_deviation: 0.5
 ```
 
 ## Requirements

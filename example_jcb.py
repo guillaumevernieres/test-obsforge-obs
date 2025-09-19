@@ -6,6 +6,7 @@ configuration generator with JCB-GDAS templates.
 
 import sys
 import os
+import yaml
 
 # Add src to path
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), 'src'))
@@ -31,36 +32,10 @@ def main():
         print(f"    ... and {len(available_templates) - 10} more")
     print()
 
-    # Create observation list with JCB-compatible format
-    observations = [
-        {
-            "type": "sst_generic",
-            "input_path": "./data/marine",
-            "input_prefix": "",
-            "input_suffix": ".nc",
-            "output_path": "./output/marine",
-            "output_prefix": "diag_",
-            "output_suffix": "_out.nc"
-        },
-        {
-            "type": "insitu_temp_profile_argo",
-            "input_path": "./data/marine",
-            "input_prefix": "",
-            "input_suffix": ".nc",
-            "output_path": "./output/marine",
-            "output_prefix": "diag_",
-            "output_suffix": "_out.nc"
-        },
-        {
-            "type": "adt_rads_all",
-            "input_path": "./data/marine",
-            "input_prefix": "",
-            "input_suffix": ".nc",
-            "output_path": "./output/marine",
-            "output_prefix": "diag_",
-            "output_suffix": "_out.nc"
-        }
-    ]
+    # Load observations from YAML file
+    with open("config/example_observations_jcb.yaml", 'r') as f:
+        obs_data = yaml.safe_load(f)
+        observations = obs_data['observations']
 
     # Additional context for the 3DVAR configuration
     context = {

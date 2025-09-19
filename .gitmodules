@@ -1,0 +1,3 @@
+[submodule "jcb-gdas"]
+	path = jcb-gdas
+	url = https://github.com/NOAA-EMC/jcb-gdas.git

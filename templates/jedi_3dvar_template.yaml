@@ -1,0 +1,79 @@
+# JEDI 3DVAR Configuration Template for Marine Observations
+# This is a placeholder template - please provide your actual Jinja2 template
+
+cost_function:
+  cost_type: 3D-Var
+  window_begin: "{{ window_begin | default('2024-01-01T00:00:00Z') }}"
+  window_length: "{{ window_length | default('PT6H') }}"
+
+  # Background term
+  background:
+    type: ensemble
+    date: "{{ background_date | default(window_begin) }}"
+    members from template:
+      template:
+        filename: "{{ background_template | default('background_%mem%.nc') }}"
+      pattern: '%mem%'
+      nmembers: "{{ ensemble_members | default(20) }}"
+
+  # Model configuration
+  model:
+    name: "{{ model_name | default('MOM6') }}"
+    tstep: "{{ model_tstep | default('PT1H') }}"
+    model variables: &model_vars
+      - ocean_temperature
+      - ocean_salinity
+      - sea_surface_height
+      - ocean_u_velocity
+      - ocean_v_velocity
+
+  # Observations
+  observations:
+    observers:
+{% for obs_type, obs_group in observations_by_type.items() %}
+    # {{ obs_type }} observations
+{% for obs in obs_group %}
+    - obs space:
+        name: "{{ obs.type }}"
+        obsdatain:
+          engine:
+            type: H5File
+            obsfile: "{{ obs.file }}"
+        obsdataout:
+          engine:
+            type: H5File
+            obsfile: "{{ obs.file | replace('.nc', '_out.nc') }}"
+        simulated variables: {{ obs.variables }}
+      obs operator:
+        name: "{{ obs.observation_operator }}"
+      obs error:
+        covariance model: "{{ obs.obs_error.covariance_model }}"
+{% if obs.obs_error.covariance_model == "diagonal" %}
+        variance:
+{% for var in obs.variables %}
+          {{ var }}: {{ obs.obs_error.standard_deviation ** 2 }}
+{% endfor %}
+{% endif %}
+      obs filters: []
+{% endfor %}
+{% endfor %}
+
+# Variational configuration
+variational:
+  minimizer:
+    algorithm: DRIPCG
+  iterations:
+  - ninner: {{ outer_iterations | default(10) }}
+    gradient_norm_reduction: {{ gradient_norm_reduction | default(1e-10) }}
+    test: on
+    geometry:
+      nml_file_in: "{{ geometry_namelist | default('input.nml') }}"
+      fields metadata: "{{ fields_metadata | default('fields_metadata.yaml') }}"
+
+# Output configuration
+output:
+  filetype: cube
+  datadir: "{{ output_dir | default('./output') }}"
+  filename: "{{ output_filename | default('analysis.nc') }}"
+  first: PT0H
+  frequency: PT6H

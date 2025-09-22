@@ -1,0 +1,61 @@
+#!/bin/bash
+#SBATCH --job-name=3dvar_{{ cycle_name }}
+#SBATCH --output=3dvar_{{ cycle_name }}.%j.out
+#SBATCH --error=3dvar_{{ cycle_name }}.%j.err
+#SBATCH --time={{ job_time | default('02:00:00') }}
+#SBATCH --ntasks={{ ntasks | default(24) }}
+#SBATCH --partition={{ partition | default('analysis') }}
+
+# Marine 3DVAR job for {{ cycle_name }}
+# Generated observations: {{ jcb_obs_types | join(', ') }}
+
+# Environment setup
+export CYCLE_TYPE={{ cycle_type }}
+export CYCLE_DATE={{ cycle_date }}
+export CYCLE_HOUR={{ cycle_hour }}
+export CONFIG_FILE="config_{{ cycle_name }}.yaml"
+
+# Data paths
+export OBSFORGE_ROOT="{{ obsforge_root }}"
+export CYCLE_DATA_DIR="${OBSFORGE_ROOT}/{{ cycle_type }}.{{ cycle_date }}/{{ cycle_hour }}/ocean"
+
+# JEDI setup
+export JEDI_ROOT="{{ jedi_root | default('/path/to/jedi') }}"
+export JEDI_BUILD="${JEDI_ROOT}/build"
+
+# Run directory
+RUNDIR="run_{{ cycle_name }}"
+mkdir -p $RUNDIR
+cd $RUNDIR
+
+# Copy configuration (now in same directory)
+cp ../$CONFIG_FILE .
+
+# Link observation data
+obs_files_found=0
+{% for obs_category in obs_categories %}
+for f in ${CYCLE_DATA_DIR}/{{ obs_category }}/*.nc; do
+    if [ -e "$f" ]; then
+        ln -sf "$f" .
+        obs_files_found=1
+    fi
+done
+{% endfor %}
+
+if [ $obs_files_found -eq 0 ]; then
+    echo "Error: No observation files found in ${CYCLE_DATA_DIR} for categories: {{ obs_categories | join(', ') }}"
+    exit 2
+fi
+
+# Skip for now
+## Run JEDI 3DVAR
+#echo "Starting 3DVAR for {{ cycle_name }} at $(date)"
+#mpirun -np $SLURM_NTASKS ${JEDI_BUILD}/bin/fv3jedi_var.x $CONFIG_FILE
+#
+## Check for successful completion
+#if [ $? -eq 0 ]; then
+#    echo "3DVAR completed successfully for {{ cycle_name }} at $(date)"
+#else
+#    echo "3DVAR failed for {{ cycle_name }} at $(date)"
+#    exit 1
+#fi

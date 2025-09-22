@@ -114,22 +114,32 @@ class JCBGDASTemplateManager:
 class MarineObsConfigGenerator:
     """Generator for JEDI 3DVAR configuration files from marine obs."""
 
-    def __init__(self, jcb_gdas_path: str = "jcb-gdas"):
+    def __init__(self, jcb_gdas_path: str = "jcb-gdas",
+                 template_dir: str = "templates"):
         """
         Initialize the configuration generator.
 
         Args:
             jcb_gdas_path: Path to the JCB-GDAS repository
+            template_dir: Path to custom templates directory
         """
         self.jcb_manager = JCBGDASTemplateManager(jcb_gdas_path)
+        self.template_dir = Path(template_dir)
 
-        # Set up Jinja environment for JCB templates only
-        jcb_loader = jinja2.FileSystemLoader(
+        # Set up Jinja environment for both JCB and custom templates
+        loaders = []
+
+        # Add custom templates loader if directory exists
+        if self.template_dir.exists():
+            loaders.append(jinja2.FileSystemLoader(self.template_dir))
+
+        # Add JCB templates loader
+        loaders.append(jinja2.FileSystemLoader(
             self.jcb_manager.marine_templates_path
-        )
+        ))
 
         self.env = jinja2.Environment(
-            loader=jcb_loader,
+            loader=jinja2.ChoiceLoader(loaders),
             trim_blocks=True,
             lstrip_blocks=True
         )
@@ -226,7 +236,7 @@ class MarineObsConfigGenerator:
                 self.logger.error(msg)
                 continue
 
-        # Create the complete 3DVAR configuration
+        # Create the complete 3DVAR configuration using template
         full_config = self._create_full_3dvar_config(obs_configs,
                                                      additional_context)
 
@@ -277,10 +287,10 @@ class MarineObsConfigGenerator:
     def _create_full_3dvar_config(self, obs_configs: List[Dict[str, Any]],
                                   additional_context: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:  # noqa: E501
         """
-        Create the complete 3DVAR configuration with observations.
+        Create the complete 3DVAR configuration using Jinja template.
 
         Args:
-            obs_configs: List of observation configurations
+            obs_configs: List of observation configurations from JCB templates
             additional_context: Additional context variables
 
         Returns:
@@ -288,61 +298,35 @@ class MarineObsConfigGenerator:
         """
         context = additional_context or {}
 
-        config = {
-            'cost_function': {
-                'cost_type': '3D-Var',
-                'window_begin': context.get('window_begin', '2024-01-01T00:00:00Z'),
-                'window_length': context.get('window_length', 'PT6H'),
-                'background': {
-                    'type': 'ensemble',
-                    'date': context.get('background_date', context.get('window_begin', '2024-01-01T00:00:00Z')),
-                    'members from template': {
-                        'template': {
-                            'filename': context.get('background_template', 'background_%mem%.nc')
-                        },
-                        'pattern': '%mem%',
-                        'nmembers': context.get('ensemble_members', 20)
-                    }
-                },
-                'model': {
-                    'name': context.get('model_name', 'MOM6'),
-                    'tstep': context.get('model_tstep', 'PT1H'),
-                    'model variables': [
-                        'ocean_temperature',
-                        'ocean_salinity',
-                        'sea_surface_height',
-                        'ocean_u_velocity',
-                        'ocean_v_velocity'
-                    ]
-                },
-                'observations': {
-                    'observers': obs_configs
-                }
-            },
-            'variational': {
-                'minimizer': {
-                    'algorithm': 'DRIPCG'
-                },
-                'iterations': [{
-                    'ninner': context.get('outer_iterations', 10),
-                    'gradient_norm_reduction': context.get('gradient_norm_reduction', 1e-10),
-                    'test': 'on',
-                    'geometry': {
-                        'nml_file_in': context.get('geometry_namelist', 'input.nml'),
-                        'fields metadata': context.get('fields_metadata', 'fields_metadata.yaml')
-                    }
-                }]
-            },
-            'output': {
-                'filetype': 'cube',
-                'datadir': context.get('output_dir', './output'),
-                'filename': context.get('output_filename', 'analysis.nc'),
-                'first': 'PT0H',
-                'frequency': 'PT6H'
-            }
+        # Convert observation configs to YAML strings for template
+        obs_yaml_strings = []
+        for obs_config in obs_configs:
+            obs_yaml = yaml.dump(obs_config, default_flow_style=False)
+            # Remove the leading "---" if present
+            obs_yaml = obs_yaml.lstrip('---\n')
+            obs_yaml_strings.append(obs_yaml.rstrip())
+
+        # Prepare template context
+        template_context = {
+            'obs_configs': obs_yaml_strings,
+            **context  # Include all additional context
         }
 
-        return config
+        try:
+            # Load and render the 3DVAR template
+            template = self.env.get_template('jedi_3dvar_template.yaml.j2')
+            rendered_config = template.render(**template_context)
+
+            # Parse the rendered YAML back to dictionary
+            config_dict = yaml.safe_load(rendered_config)
+            return config_dict
+
+        except jinja2.TemplateNotFound:
+            self.logger.error("3DVAR template 'jedi_3dvar_template.yaml.j2' not found")
+            raise
+        except Exception as e:
+            self.logger.error(f"Failed to render 3DVAR template: {e}")
+            raise
 
     def validate_observations(self, obs_list: List[Union[str, Dict[str, Any]]]) -> bool:
         """

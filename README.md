@@ -13,7 +13,9 @@ This application processes obsForge-generated marine observations through a low-
 ## Structure
 
 - `src/` - Main application source code
+- `apps/` - Complete applications built on the core system
 - `config/` - Configuration files and examples
+- `templates/` - Jinja2 templates for 3DVAR configuration generation
 - `tests/` - Unit tests
 - `data/` - Sample data and observations
 - `jcb-gdas/` - Git submodule containing JCB-GDAS templates
@@ -27,6 +29,24 @@ The application now integrates with the official JCB-GDAS (JEDI Configuration Bu
 - Altimeter Data (ADT) - Multiple missions (Jason, Sentinel, etc.)
 - In-situ profiles - Argo, XBT, CTD, glider data
 - Ice concentration - Various sensors
+
+## Applications
+
+### ObsForge Cycle Processor
+
+The `apps/` directory contains a complete application for processing obsForge directory structures:
+
+```bash
+python apps/obsforge_cycle_processor.py --obsforge /path/to/obsforge_root --output-dir ./cycle_output
+```
+
+This application:
+- Scans obsForge directory structures for available observations
+- Generates job cards and YAML configurations for each cycle (GFS and GDAS)
+- Creates JEDI 3DVAR configurations containing only observations available for each specific cycle
+- Supports both early (GFS) and late (GDAS) cycles
+
+See `apps/README.md` for detailed documentation.
 
 ## Usage
 

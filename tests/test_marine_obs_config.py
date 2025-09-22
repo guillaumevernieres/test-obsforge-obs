@@ -96,6 +96,29 @@ class TestMarineObsConfigGenerator(unittest.TestCase):
         )
         os.makedirs(self.marine_path)
 
+        # Create mock templates directory
+        self.template_dir = os.path.join(self.temp_dir, 'templates')
+        os.makedirs(self.template_dir)
+
+        # Create mock 3DVAR template
+        template_3dvar_content = """
+cost_function:
+  cost_type: 3D-Var
+  window_begin: "{{ window_begin | default('2024-01-01T00:00:00Z') }}"
+  observations:
+    observers:
+{% for obs_config in obs_configs %}
+{{ obs_config | indent(6, True) }}
+{% endfor %}
+output:
+  filename: "{{ output_filename | default('test_analysis.nc') }}"
+"""
+        template_3dvar_path = os.path.join(
+            self.template_dir, 'jedi_3dvar_template.yaml.j2'
+        )
+        with open(template_3dvar_path, 'w') as f:
+            f.write(template_3dvar_content)
+
         # Create mock template files
         template_content = """
 # Mock JCB template for {{ observation_from_jcb }}
@@ -120,7 +143,10 @@ observations:
             with open(template_path, 'w') as f:
                 f.write(template_content)
 
-        self.generator = MarineObsConfigGenerator(self.jcb_path)
+        self.generator = MarineObsConfigGenerator(
+            self.jcb_path,
+            self.template_dir
+        )
 
         # Test observations in different formats
         self.test_obs_strings = ['sst_viirs_npp_l3u', 'sss_smap_l2']

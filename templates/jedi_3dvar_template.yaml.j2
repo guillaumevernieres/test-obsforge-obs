@@ -1,0 +1,55 @@
+# JEDI 3DVAR Configuration Template for Marine Observations
+# Generated from JCB-GDAS templates
+
+cost_function:
+  cost_type: 3D-Var
+  window_begin: "{{ window_begin | default('2024-01-01T00:00:00Z') }}"
+  window_length: "{{ window_length | default('PT6H') }}"
+
+  # Background term
+  background:
+    type: ensemble
+    date: "{{ background_date | default(window_begin) | default('2024-01-01T00:00:00Z') }}"
+    members from template:
+      template:
+        filename: "{{ background_template | default('background_%mem%.nc') }}"
+      pattern: '%mem%'
+      nmembers: {{ ensemble_members | default(20) }}
+
+  # Model configuration
+  model:
+    name: "{{ model_name | default('MOM6') }}"
+    tstep: "{{ model_tstep | default('PT1H') }}"
+    model variables:
+      - ocean_temperature
+      - ocean_salinity
+      - sea_surface_height
+      - ocean_u_velocity
+      - ocean_v_velocity
+
+  # Observations generated from JCB-GDAS templates
+  observations:
+    observers:
+{% for obs_config in obs_configs %}
+{{ obs_config | indent(6, True) }}
+{% endfor %}
+
+# Variational configuration
+variational:
+  minimizer:
+    algorithm: DRIPCG
+  iterations:
+  - ninner: {{ outer_iterations | default(10) }}
+    gradient_norm_reduction: {{ gradient_norm_reduction | default(1e-10) }}
+    test: on
+    geometry:
+      nml_file_in: "{{ geometry_namelist | default('input.nml') }}"
+      fields metadata: "{{ fields_metadata | default('fields_metadata.yaml') }}"
+
+# Output configuration
+output:
+  filetype: cube
+  datadir: "{{ output_dir | default('./output') }}"
+  filename: "{{ output_filename | default('analysis.nc') }}"
+  first: PT0H
+  frequency: PT6H

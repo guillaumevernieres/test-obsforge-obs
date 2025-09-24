@@ -49,13 +49,17 @@ fi
 
 # Skip for now
 ## Run JEDI 3DVAR
-#echo "Starting 3DVAR for {{ cycle_name }} at $(date)"
-#mpirun -np $SLURM_NTASKS ${JEDI_BUILD}/bin/fv3jedi_var.x $CONFIG_FILE
-#
-## Check for successful completion
-#if [ $? -eq 0 ]; then
-#    echo "3DVAR completed successfully for {{ cycle_name }} at $(date)"
-#else
-#    echo "3DVAR failed for {{ cycle_name }} at $(date)"
-#    exit 1
-#fi
+echo "Starting 3DVAR for {{ cycle_name }} at $(date)"
+socascratch=/home/gvernier/sandboxes/jedi-bundle-new/socascratch
+cp -r $socascratch/* .
+gdasbin=/home/gvernier/sandboxes/jedi-bundle-new/build/bin/soca_var.x
+ln -sf $gdasbin .
+mpirun -np 2 soca_var.x $CONFIG_FILE
+
+# Check for successful completion
+if [ $? -eq 0 ]; then
+    echo "3DVAR completed successfully for {{ cycle_name }} at $(date)"
+else
+    echo "3DVAR failed for {{ cycle_name }} at $(date)"
+    exit 1
+fi

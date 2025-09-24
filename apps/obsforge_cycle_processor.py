@@ -27,6 +27,7 @@ obsforge_comroot/
 
 import os
 import sys
+import glob
 import subprocess
 from pathlib import Path
 from datetime import datetime, timedelta
@@ -35,12 +36,12 @@ import yaml
 import logging
 import argparse
 import re
-from jinja2 import Environment, FileSystemLoader
+from jinja2 import Environment, FileSystemLoader, ChoiceLoader
 
 # Add src to path for imports
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'src'))
 
-from marine_obs_config import MarineObsConfigGenerator
+#from marine_obs_config import MarineObsConfigGenerator
 
 
 class ObsForgeScanner:
@@ -67,20 +68,30 @@ class ObsForgeScanner:
                 f"ObsForge directory not found: {self.obsforge_root}"
             )
 
-    def find_cycles(self) -> List[Tuple[str, str, str]]:
+    def find_cycles(
+        self,
+        cycle_types: List[str] = ["gfs", "gdas"],
+        start_date: Optional[str] = None,
+        end_date: Optional[str] = None
+    ) -> List[Tuple[str, str, str]]:
         """
-        Find all available cycles in the obsForge directory.
+        Find available cycles in the obsForge directory, filtered by cycle type and date range.
+
+        Args:
+            cycle_types: List of cycle types to include ('gfs', 'gdas')
+            start_date: Start date in YYYYMMDD format (inclusive)
+            end_date: End date in YYYYMMDD format (inclusive)
 
         Returns:
-            List of tuples (cycle_type, date, hour) where:
-            - cycle_type: 'gfs' or 'gdas'
-            - date: YYYYMMDD format
-            - hour: HH format
+            List of tuples (cycle_type, date, hour)
         """
         cycles = []
-
-        # Pattern to match cycle directories: gfs.YYYYMMDD or gdas.YYYYMMDD
+        cycle_types_set = set(cycle_types)
         cycle_pattern = re.compile(r'^(gfs|gdas)\.(\d{8})$')
+
+        # Convert date strings to datetime objects for comparison
+        start_dt = datetime.strptime(start_date, "%Y%m%d") if start_date else None
+        end_dt = datetime.strptime(end_date, "%Y%m%d") if end_date else None
 
         for cycle_dir in self.obsforge_root.iterdir():
             if not cycle_dir.is_dir():
@@ -91,11 +102,20 @@ class ObsForgeScanner:
                 continue
 
             cycle_type, date = match.groups()
+            if cycle_type not in cycle_types_set:
+                continue
+
+            # Filter by date range if specified
+            date_dt = datetime.strptime(date, "%Y%m%d")
+            if start_dt and date_dt < start_dt:
+                continue
+            if end_dt and date_dt > end_dt:
+                continue
 
             # Look for hour subdirectories
             for hour_dir in cycle_dir.iterdir():
                 if hour_dir.is_dir() and hour_dir.name.isdigit():
-                    hour = hour_dir.name.zfill(2)  # Ensure 2-digit format
+                    hour = hour_dir.name.zfill(2)
                     cycles.append((cycle_type, date, hour))
 
         return sorted(cycles)
@@ -123,7 +143,7 @@ class ObsForgeScanner:
         observations = {}
 
         # Scan known observation type directories
-        obs_types = ['adt', 'icec', 'sss', 'sst']
+        obs_types = ['adt', 'icec', 'sss', 'sst', 'insitu']
 
         for obs_type in obs_types:
             obs_dir = cycle_path / obs_type
@@ -138,110 +158,6 @@ class ObsForgeScanner:
                     self.logger.info(msg)
 
         return observations
-
-    def map_obsforge_to_jcb_types(self, obs_type: str,
-                                  files: List[str]) -> List[str]:
-        """
-        Map obsForge observation types to JCB template names.
-
-        Args:
-            obs_type: ObsForge observation type ('adt', 'icec', 'sss', 'sst')
-            files: List of available files for this observation type
-
-        Returns:
-            List of JCB template names that correspond to the available files
-        """
-        # Mapping from obsForge types to JCB template patterns
-        type_mapping = {
-            'adt': self._map_adt_files,
-            'sst': self._map_sst_files,
-            'sss': self._map_sss_files,
-            'icec': self._map_icec_files
-        }
-
-        if obs_type in type_mapping:
-            return type_mapping[obs_type](files)
-        else:
-            self.logger.warning(f"Unknown observation type: {obs_type}")
-            return []
-
-    def _map_adt_files(self, files: List[str]) -> List[str]:
-        """Map ADT files to JCB template names."""
-        jcb_types = []
-
-        # Pattern matching for RADS altimeter data
-        satellite_patterns = {
-            '3a': 'rads_adt_3a',
-            '3b': 'rads_adt_3b',
-            'c2': 'rads_adt_c2',
-            'j3': 'rads_adt_j3',
-            'sa': 'rads_adt_sa'
-        }
-
-        for file in files:
-            for sat_code, jcb_type in satellite_patterns.items():
-                if f"_{sat_code}." in file or f"_{sat_code}_" in file:
-                    if jcb_type not in jcb_types:
-                        jcb_types.append(jcb_type)
-                    break
-
-        return jcb_types
-
-    def _map_sst_files(self, files: List[str]) -> List[str]:
-        """Map SST files to JCB template names."""
-        jcb_types = []
-
-        # Common SST sensor patterns
-        sensor_patterns = {
-            'viirs': 'sst_viirs_npp_l3u',
-            'avhrr': 'sst_avhrr_metop_l3u',
-            'amsre': 'sst_amsre_l3u',
-            'modis': 'sst_modis_l3u'
-        }
-
-        for file in files:
-            file_lower = file.lower()
-            for sensor, jcb_type in sensor_patterns.items():
-                if sensor in file_lower:
-                    if jcb_type not in jcb_types:
-                        jcb_types.append(jcb_type)
-                    break
-            else:
-                # Generic SST if no specific sensor found
-                if 'sst_generic' not in jcb_types:
-                    jcb_types.append('sst_generic')
-
-        return jcb_types
-
-    def _map_sss_files(self, files: List[str]) -> List[str]:
-        """Map SSS files to JCB template names."""
-        jcb_types = []
-
-        # Common SSS sensor patterns
-        sensor_patterns = {
-            'smap': 'sss_smap_l2',
-            'smos': 'sss_smos_l3'
-        }
-
-        for file in files:
-            file_lower = file.lower()
-            for sensor, jcb_type in sensor_patterns.items():
-                if sensor in file_lower:
-                    if jcb_type not in jcb_types:
-                        jcb_types.append(jcb_type)
-                    break
-            else:
-                # Generic SSS if no specific sensor found
-                if 'sss_generic' not in jcb_types:
-                    jcb_types.append('sss_generic')
-
-        return jcb_types
-
-    def _map_icec_files(self, files: List[str]) -> List[str]:
-        """Map sea ice concentration files to JCB template names."""
-        # For now, use a generic ice concentration type
-        return ['icec_generic'] if files else []
-
 
 class ObsForgeCycleProcessor:
     """Main processor for generating job cards and configs from cycles."""
@@ -268,11 +184,14 @@ class ObsForgeCycleProcessor:
             loader=FileSystemLoader(str(self.template_dir))
         )
 
+        # Store JCB-GDAS path for 3DVAR rendering includes
+        self.jcb_gdas_path = Path(jcb_gdas_path)
+
         self.logger = logging.getLogger(__name__)
         self.scanner = ObsForgeScanner(obsforge_comroot, self.logger)
-        self.config_generator = MarineObsConfigGenerator(
-            jcb_gdas_path, template_dir
-        )
+        #self.config_generator = MarineObsConfigGenerator(
+        #    jcb_gdas_path, template_dir
+        #)
 
     def process_all_cycles(self) -> Dict[str, Any]:
         """
@@ -281,7 +200,7 @@ class ObsForgeCycleProcessor:
         Returns:
             Summary dictionary of processed cycles
         """
-        cycles = self.scanner.find_cycles()
+        cycles = self.scanner.find_cycles(cycle_types=["gfs"])
         processed_cycles = []
 
         self.logger.info(f"Found {len(cycles)} cycles to process")
@@ -290,9 +209,15 @@ class ObsForgeCycleProcessor:
             try:
                 result = self.process_cycle(cycle_type, date, hour)
                 processed_cycles.append(result)
-                self.logger.info(f"Successfully processed {cycle_type}.{date}.{hour}")
+                self.logger.info(
+                    "Successfully processed %s.%s.%s",
+                    cycle_type, date, hour
+                )
             except Exception as e:
-                self.logger.error(f"Failed to process {cycle_type}.{date}.{hour}: {e}")
+                self.logger.error(
+                    "Failed to process %s.%s.%s: %s",
+                    cycle_type, date, hour, e
+                )
                 continue
 
         summary = {
@@ -304,7 +229,9 @@ class ObsForgeCycleProcessor:
 
         return summary
 
-    def process_cycle(self, cycle_type: str, date: str, hour: str) -> Dict[str, Any]:
+    def process_cycle(
+            self, cycle_type: str, date: str, hour: str
+        ) -> Dict[str, Any]:
         """
         Process a single cycle and generate job card and config.
 
@@ -320,7 +247,9 @@ class ObsForgeCycleProcessor:
         self.logger.info(f"Processing cycle: {cycle_name}")
 
         # Scan for available observations
-        obs_files = self.scanner.scan_cycle_observations(cycle_type, date, hour)
+        obs_files = self.scanner.scan_cycle_observations(
+            cycle_type, date, hour
+        )
 
         if not obs_files:
             self.logger.warning(f"No observations found for {cycle_name}")
@@ -333,19 +262,26 @@ class ObsForgeCycleProcessor:
             }
 
         # Map to JCB observation types
-        jcb_obs_types = []
-        for obs_type, files in obs_files.items():
-            mapped_types = self.scanner.map_obsforge_to_jcb_types(obs_type, files)
-            jcb_obs_types.extend(mapped_types)
+        obs_dir = os.path.join(self.obsforge_comroot,
+                               f"{cycle_type}.{date}",
+                               f"{hour}",
+                               "ocean")
+        obs_file_list = glob.glob(os.path.join(obs_dir, '*',f"{cycle_type}.t{hour}z.*.nc"))
 
-        # Remove duplicates while preserving order
-        jcb_obs_types = list(dict.fromkeys(jcb_obs_types))
+        jcb_obs_types = []
+        for obs_file in obs_file_list:
+            mapped_type = f"{obs_file.split('.')[3]}"
+            jcb_obs_types.append(mapped_type)
 
         # Generate job card
-        job_card_path = self._generate_job_card(cycle_type, date, hour, jcb_obs_types)
+        job_card_path = self._generate_job_card(
+            cycle_type, date, hour, jcb_obs_types
+        )
 
         # Generate 3DVAR configuration
-        config_path = self._generate_3dvar_config(cycle_type, date, hour, jcb_obs_types)
+        config_path = self._generate_3dvar_config(
+            cycle_type, date, hour, jcb_obs_types
+        )
 
         return {
             'cycle': cycle_name,
@@ -355,8 +291,13 @@ class ObsForgeCycleProcessor:
             'config_file': str(config_path)
         }
 
-    def _generate_job_card(self, cycle_type: str, date: str, hour: str,
-                          jcb_obs_types: List[str]) -> Path:
+    def _generate_job_card(
+            self,
+            cycle_type: str,
+            date: str,
+            hour: str,
+            jcb_obs_types: List[str],
+        ) -> Path:
         """Generate a job card script for the cycle."""
         cycle_name = f"{cycle_type}.{date}.{hour}"
 
@@ -367,16 +308,7 @@ class ObsForgeCycleProcessor:
         job_card_path = cycle_output_dir / f"job_{cycle_name}.sh"
 
         # Determine observation categories for data linking
-        obs_categories = set()
-        for obs_type in jcb_obs_types:
-            if 'adt' in obs_type or 'rads' in obs_type:
-                obs_categories.add('adt')
-            elif 'sst' in obs_type:
-                obs_categories.add('sst')
-            elif 'sss' in obs_type:
-                obs_categories.add('sss')
-            elif 'icec' in obs_type:
-                obs_categories.add('icec')
+        obs_categories = {'adt', 'sst', 'sss', 'icec', 'insitu'}
 
         # Template context
         template_context = {
@@ -402,12 +334,18 @@ class ObsForgeCycleProcessor:
 
         return job_card_path
 
-    def _generate_3dvar_config(self, cycle_type: str, date: str, hour: str,
-                              jcb_obs_types: List[str]) -> Path:
-        """Generate 3DVAR YAML configuration for the cycle."""
+    def _generate_3dvar_config(
+            self,
+            cycle_type: str,
+            date: str,
+            hour: str,
+            jcb_obs_types: List[str],
+        ) -> Path:
+        """Generateob 3DVAR YAML configuration for the cycle."""
         cycle_name = f"{cycle_type}.{date}.{hour}"
 
-        # Create cycle-specific output directory (should already exist from job card)
+        # Create cycle-specific output directory
+        # (should already exist from job card)
         cycle_output_dir = self.output_dir / f"{cycle_type}.{date}" / hour
         cycle_output_dir.mkdir(parents=True, exist_ok=True)
 
@@ -416,36 +354,104 @@ class ObsForgeCycleProcessor:
         # Prepare datetime objects for configuration
         cycle_datetime = datetime.strptime(f"{date}{hour}", "%Y%m%d%H")
         window_begin = cycle_datetime - timedelta(hours=3)
+        window_middle = cycle_datetime
+        window_end = cycle_datetime + timedelta(hours=3)
 
         # Additional context for template rendering
         additional_context = {
             'window_begin': window_begin.strftime('%Y-%m-%dT%H:%M:%SZ'),
+            'window_middle': window_middle.strftime('%Y-%m-%dT%H:%M:%SZ'),
+            'window_end': window_end.strftime('%Y-%m-%dT%H:%M:%SZ'),
             'window_length': 'PT6H',
             'cycle_type': cycle_type,
             'cycle_date': date,
             'cycle_hour': hour,
-            'background_date': cycle_datetime.strftime('%Y-%m-%dT%H:%M:%SZ'),
             'output_filename': f'analysis_{cycle_name}.nc',
             'output_dir': f'./output_{cycle_name}'
         }
 
-        # Generate configuration using the existing generator
-        self.config_generator.generate_config_from_jcb(
-            obs_list=jcb_obs_types,
-            additional_context=additional_context,
-            output_file=str(config_path)
+        # Build list of JCB observer template files (filenames) to include
+        obs_template_files = [f"{obs}.yaml.j2" for obs in jcb_obs_types]
+        obs_dir = os.path.join(self.obsforge_comroot,
+                               f"{cycle_type}.{window_middle.strftime('%Y%m%d')}",
+                               f"{hour}",
+                               "ocean")
+        obs_file_list = glob.glob(os.path.join(obs_dir, '*',f"{cycle_type}.t{hour}z.*.nc"))
+
+        available_templates = []
+        for obs_file in obs_file_list:
+            available_templates.append(f"{obs_file.split('.')[3]}.yaml.j2")
+
+        jcb_templates_dir = self.jcb_gdas_path / 'observations' / 'marine'
+
+        env = Environment(
+            loader=ChoiceLoader([
+                FileSystemLoader(str(self.template_dir)),
+                FileSystemLoader(str(jcb_templates_dir))
+            ]),
+            trim_blocks=True,
+            lstrip_blocks=True
         )
+
+        # Pre-render each observer template to a YAML block string
+        rendered_observer_blocks: List[str] = []
+        for name in available_templates:
+            # Minimal context expected by JCB templates
+            # Extract the base observer name (without .yaml.j2)
+            observer_name = name.replace('.yaml.j2', '')
+            marine_obsdatain_path = "."
+            marine_obsdatain_prefix = f"{cycle_type}.t{hour}z."
+            render_context = {
+                **additional_context,
+                'observation_from_jcb': observer_name,
+                'marine_obsdatain_prefix': marine_obsdatain_prefix,
+                'marine_obsdatain_path': marine_obsdatain_path,
+                'marine_obsdatain_suffix': '.nc',
+                'marine_obsdataout_path': '.',
+                'marine_obsdataout_suffix': '.out.nc'
+            }
+
+
+            try:
+                obs_tmpl = env.get_template(name)
+                block = obs_tmpl.render(**render_context)
+                if block and block.strip():
+                    rendered_observer_blocks.append(block)
+                else:
+                    self.logger.warning(
+                        "Rendered observer template is empty, skipping: %s",
+                        name
+                    )
+            except Exception as e:
+                self.logger.error(
+                    "Failed to render observer template %s: %s", name, e
+                )
+
+        # Render main 3DVAR template with the list of pre-rendered blocks
+        template = env.get_template('jedi_3dvar_template.yaml.j2')
+        rendered = template.render(
+            **render_context,
+            rendered_observer_blocks=rendered_observer_blocks
+        )
+
+        # Write configuration file
+        with open(config_path, 'w') as f:
+            f.write(rendered)
 
         return config_path
 
-    def execute_job_card(self, job_card_path: Path,
-                        execution_mode: str = 'sbatch') -> Dict[str, Any]:
+    def execute_job_card(
+            self,
+            job_card_path: Path,
+            execution_mode: str = 'sbatch'
+        ) -> Dict[str, Any]:
         """
         Execute a job card either via sbatch or directly in terminal.
 
         Args:
             job_card_path: Path to the job card script
-            execution_mode: Either 'sbatch' for SLURM submission or 'bash' for direct execution
+            execution_mode: Either 'sbatch' for SLURM submission or
+                'bash' for direct execution
 
         Returns:
             Dictionary with execution results
@@ -460,9 +466,18 @@ class ObsForgeCycleProcessor:
         elif execution_mode == 'bash':
             return self._run_directly(job_card_path, cycle_name)
         else:
-            raise ValueError(f"Invalid execution mode: {execution_mode}. Use 'sbatch' or 'bash'")
+            raise ValueError(
+                (
+                    f"Invalid execution mode: {execution_mode}. "
+                    "Use 'sbatch' or 'bash'"
+                )
+            )
 
-    def _submit_to_slurm(self, job_card_path: Path, cycle_name: str) -> Dict[str, Any]:
+    def _submit_to_slurm(
+            self,
+            job_card_path: Path,
+            cycle_name: str
+        ) -> Dict[str, Any]:
         """Submit job card to SLURM scheduler."""
         try:
             # Change to the job card directory for execution
@@ -487,7 +502,11 @@ class ObsForgeCycleProcessor:
                 if match:
                     job_id = int(match.group(1))
 
-            self.logger.info(f"Submitted {cycle_name} to SLURM: {result.stdout.strip()}")
+            self.logger.info(
+                "Submitted %s to SLURM: %s",
+                cycle_name,
+                result.stdout.strip()
+            )
 
             return {
                 'cycle': cycle_name,
@@ -522,7 +541,11 @@ class ObsForgeCycleProcessor:
         finally:
             os.chdir(original_cwd)
 
-    def _run_directly(self, job_card_path: Path, cycle_name: str) -> Dict[str, Any]:
+    def _run_directly(
+            self,
+            job_card_path: Path,
+            cycle_name: str
+        ) -> Dict[str, Any]:
         """Run job card directly in bash."""
         try:
             # Change to the job card directory for execution
@@ -538,10 +561,17 @@ class ObsForgeCycleProcessor:
             )
 
             status = 'completed' if result.returncode == 0 else 'failed'
-            log_level = logging.INFO if result.returncode == 0 else logging.ERROR
+            log_level = (
+                logging.INFO if result.returncode == 0 else logging.ERROR
+            )
 
-            self.logger.log(log_level,
-                           f"Direct execution of {cycle_name} {status} with return code {result.returncode}")
+            self.logger.log(
+                log_level,
+                (
+                    f"Direct execution of {cycle_name} {status} with return "
+                    f"code {result.returncode}"
+                )
+            )
 
             return {
                 'cycle': cycle_name,
@@ -564,8 +594,13 @@ class ObsForgeCycleProcessor:
         finally:
             os.chdir(original_cwd)
 
-    def process_and_execute_cycle(self, cycle_type: str, date: str, hour: str,
-                                 execution_mode: str = 'sbatch') -> Dict[str, Any]:
+    def process_and_execute_cycle(
+            self,
+            cycle_type: str,
+            date: str,
+            hour: str,
+            execution_mode: str = 'sbatch',
+        ) -> Dict[str, Any]:
         """
         Process a cycle and optionally execute the generated job card.
 
@@ -573,7 +608,8 @@ class ObsForgeCycleProcessor:
             cycle_type: 'gfs' or 'gdas'
             date: Date in YYYYMMDD format
             hour: Hour in HH format
-            execution_mode: Either 'sbatch' for SLURM submission or 'bash' for direct execution
+            execution_mode: Either 'sbatch' for SLURM submission or
+                'bash' for direct execution
 
         Returns:
             Dictionary with processing and execution results
@@ -584,7 +620,9 @@ class ObsForgeCycleProcessor:
         # If processing was successful and job card was created, execute it
         if process_result['job_card'] is not None:
             job_card_path = Path(process_result['job_card'])
-            execution_result = self.execute_job_card(job_card_path, execution_mode)
+            execution_result = self.execute_job_card(
+                job_card_path, execution_mode
+            )
 
             # Combine results
             process_result['execution'] = execution_result
@@ -938,7 +976,7 @@ def main():
             obsforge_comroot=args.obsforge,
             output_dir=args.output_dir,
             jcb_gdas_path=args.jcb_gdas_path,
-            template_dir=args.template_dir
+            template_dir=args.template_dir,
         )
 
         # Process cycles
@@ -946,7 +984,14 @@ def main():
 
         if args.execution_mode:
             # Process and execute cycles
-            cycles = processor.scanner.find_cycles()
+            if args.cycle_type == 'both':
+                cycle_types = ['gfs', 'gdas']
+            else:
+                cycle_types = [args.cycle_type]
+            date_range = args.date_range if args.date_range else None
+            cycles = processor.scanner.find_cycles(cycle_types=cycle_types,
+                                                   start_date=date_range[0],
+                                                   end_date=date_range[1])
             processed_cycles = []
             execution_results = []
 

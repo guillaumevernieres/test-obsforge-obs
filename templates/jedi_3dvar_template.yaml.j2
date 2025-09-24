@@ -1,55 +1,57 @@
-# JEDI 3DVAR Configuration Template for Marine Observations
-# Generated from JCB-GDAS templates
+cost function:
+  cost type: 3D-Var
+  jb evaluation: false
+  time window:
+    begin: "{{ window_begin }}"
+    length: "{{ window_length }}"
 
-cost_function:
-  cost_type: 3D-Var
-  window_begin: "{{ window_begin | default('2024-01-01T00:00:00Z') }}"
-  window_length: "{{ window_length | default('PT6H') }}"
+  analysis variables:
+  - sea_ice_area_fraction
+  - sea_water_salinity
+  - sea_water_potential_temperature
+  - sea_surface_height_above_geoid
 
-  # Background term
+  geometry:
+    geom_grid_file: soca_gridspec.72x35x25.nc
+    mom6_input_nml: inputmom6.nml
+    fields metadata: fields_metadata.yaml
+
   background:
-    type: ensemble
-    date: "{{ background_date | default(window_begin) | default('2024-01-01T00:00:00Z') }}"
-    members from template:
-      template:
-        filename: "{{ background_template | default('background_%mem%.nc') }}"
-      pattern: '%mem%'
-      nmembers: {{ ensemble_members | default(20) }}
+    read_from_file: 1
+    basename: ./bkg/
+    ocn_filename: ocean.nc
+    ice_filename: ice.nc
+    date: "{{ window_middle }}"
+    state variables:
+    - sea_ice_area_fraction
+    - sea_water_salinity
+    - sea_water_potential_temperature
+    - sea_surface_height_above_geoid
+    - sea_water_cell_thickness
+    - sea_water_depth
 
-  # Model configuration
-  model:
-    name: "{{ model_name | default('MOM6') }}"
-    tstep: "{{ model_tstep | default('PT1H') }}"
-    model variables:
-      - ocean_temperature
-      - ocean_salinity
-      - sea_surface_height
-      - ocean_u_velocity
-      - ocean_v_velocity
+  background error:
+    covariance model: SABER
+    saber central block:
+      saber block name: ID
 
   # Observations generated from JCB-GDAS templates
   observations:
     observers:
-{% for obs_config in obs_configs %}
-{{ obs_config | indent(6, True) }}
+{% for block in rendered_observer_blocks %}
+{{ ("      " ~ block|trim)|replace('\n', '\n      ') ~ '\n' }}
 {% endfor %}
 
-# Variational configuration
 variational:
   minimizer:
-    algorithm: DRIPCG
+    algorithm: RPCG
   iterations:
-  - ninner: {{ outer_iterations | default(10) }}
-    gradient_norm_reduction: {{ gradient_norm_reduction | default(1e-10) }}
-    test: on
+  - ninner: 1
+    gradient norm reduction: 1e-5
+    test: off
     geometry:
-      nml_file_in: "{{ geometry_namelist | default('input.nml') }}"
-      fields metadata: "{{ fields_metadata | default('fields_metadata.yaml') }}"
+      geom_grid_file: soca_gridspec.72x35x25.nc
+      mom6_input_nml: inputmom6.nml
+      fields metadata: fields_metadata.yaml
 
-# Output configuration
-output:
-  filetype: cube
-  datadir: "{{ output_dir | default('./output') }}"
-  filename: "{{ output_filename | default('analysis.nc') }}"
-  first: PT0H
-  frequency: PT6H
+final j evaluation: false

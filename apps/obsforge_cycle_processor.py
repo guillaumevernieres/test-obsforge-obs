@@ -80,6 +80,15 @@ def main():
         help='Path to custom templates (default: ../templates)'
     )
     parser.add_argument(
+        '--jedi-root',
+        dest='jedi_root',
+        help='Path to JEDI installation root (overrides template default)'
+    )
+    parser.add_argument(
+        '--socascratch',
+        help='Path to SOCA scratch directory to seed the run directory'
+    )
+    parser.add_argument(
         '--cycle-type',
         choices=['gfs', 'gdas', 'both'],
         default='both',
@@ -123,6 +132,8 @@ def main():
             output_dir=args.output_dir,
             jcb_gdas_path=args.jcb_gdas_path,
             template_dir=args.template_dir,
+            jedi_root=args.jedi_root,
+            socascratch=args.socascratch,
         )
 
         # Process cycles
@@ -237,6 +248,11 @@ def main():
         # Generate and write separate markdown status reports
         # for gfs and gdas cycles
         processor.write_separated_status_reports(
+            summary, Path(args.output_dir)
+        )
+
+        # Write failed cycles summary markdown
+        processor.write_failed_cycles_summary(
             summary, Path(args.output_dir)
         )
 

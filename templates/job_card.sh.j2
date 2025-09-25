@@ -50,11 +50,13 @@ fi
 # Skip for now
 ## Run JEDI 3DVAR
 echo "Starting 3DVAR for {{ cycle_name }} at $(date)"
-socascratch=/home/gvernier/sandboxes/jedi-bundle-new/socascratch
-cp -r $socascratch/* .
-gdasbin=/home/gvernier/sandboxes/jedi-bundle-new/build/bin/soca_var.x
-ln -sf $gdasbin .
-mpirun -np 2 soca_var.x $CONFIG_FILE
+# Parameterized paths
+socascratch="{{ socascratch | default('/path/to/socascratch') }}"
+cp -r "$socascratch"/* .
+gdasbin="{{ gdasbin | default('${JEDI_BUILD}/bin/soca_var.x') }}"
+ln -sf "$gdasbin" .
+echo "Linking GDAS binary: $gdasbin"
+mpirun -np 2 soca_var.x $CONFIG_FILE > 3dvar_{{ cycle_name }}.log 2>&1
 
 # Check for successful completion
 if [ $? -eq 0 ]; then

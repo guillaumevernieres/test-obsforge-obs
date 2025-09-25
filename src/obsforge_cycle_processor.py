@@ -21,6 +21,8 @@ class ObsForgeCycleProcessor:
         output_dir: str,
         jcb_gdas_path: str = "jcb-gdas",
         template_dir: str = "templates",
+        jedi_root: Optional[str] = None,
+        socascratch: Optional[str] = None,
     ):
         """
         Initialize the cycle processor.
@@ -30,6 +32,9 @@ class ObsForgeCycleProcessor:
             output_dir: Directory to write job cards and configs
             jcb_gdas_path: Path to JCB-GDAS repository
             template_dir: Path to custom templates
+            jedi_root: Path to JEDI installation root (optional)
+            socascratch: Path to SOCA scratch directory to seed run dir
+                (optional)
         """
         self.obsforge_comroot = obsforge_comroot
         self.output_dir = Path(output_dir)
@@ -43,6 +48,10 @@ class ObsForgeCycleProcessor:
 
         # Store JCB-GDAS path for 3DVAR rendering includes
         self.jcb_gdas_path = Path(jcb_gdas_path)
+
+        # Optional JEDI root and SOCA scratch path
+        self.jedi_root = jedi_root
+        self.socascratch = socascratch
 
         self.logger = logging.getLogger(__name__)
         self.scanner = ObsForgeScanner(obsforge_comroot, self.logger)
@@ -81,10 +90,29 @@ class ObsForgeCycleProcessor:
                 )
                 continue
 
+        # Consider cycles with no observations and/or missing status log
+        # as failures
+        successful = [
+            c
+            for c in processed_cycles
+            if c.get("observations") and not c.get("status_log_missing")
+        ]
+
+        failed_names: set[str] = set()
+        for c in processed_cycles:
+            cycle_nm = c.get("cycle", "")
+            if not c.get("observations"):
+                failed_names.add(cycle_nm)
+            if c.get("status_log_missing"):
+                failed_names.add(cycle_nm)
+
+        failed_due_to_errors = len(cycles) - len(processed_cycles)
+        total_failed = failed_due_to_errors + len(failed_names)
+
         summary: Dict[str, Any] = {
             "total_cycles": len(cycles),
-            "processed_cycles": len(processed_cycles),
-            "failed_cycles": len(cycles) - len(processed_cycles),
+            "processed_cycles": len(successful),
+            "failed_cycles": total_failed,
             "cycles": processed_cycles,
         }
 
@@ -99,6 +127,20 @@ class ObsForgeCycleProcessor:
         cycle_name = f"{cycle_type}.{date}.{hour}"
         self.logger.info(f"Processing cycle: {cycle_name}")
 
+        # Required obsForge status log path
+        status_log_path = os.path.join(
+            self.obsforge_comroot,
+            f"{cycle_type}.{date}",
+            f"{hour}",
+            "ocean",
+            f"{cycle_type}.t{hour}z.obsforge_marine_status.log",
+        )
+        status_log_exists = os.path.exists(status_log_path)
+        if not status_log_exists:
+            self.logger.error(
+                "Status log missing for %s: %s", cycle_name, status_log_path
+            )
+
         # Scan for available observations
         obs_files = self.scanner.scan_cycle_observations(
             cycle_type, date, hour
@@ -112,6 +154,8 @@ class ObsForgeCycleProcessor:
                 "jcb_types": [],
                 "job_card": None,
                 "config_file": None,
+                "status_log": status_log_path if status_log_exists else None,
+                "status_log_missing": not status_log_exists,
             }
 
         # Map to JCB observation types
@@ -146,6 +190,8 @@ class ObsForgeCycleProcessor:
             "jcb_types": jcb_obs_types,
             "job_card": str(job_card_path),
             "config_file": str(config_path),
+            "status_log": status_log_path if status_log_exists else None,
+            "status_log_missing": not status_log_exists,
         }
 
     def _generate_job_card(
@@ -176,6 +222,9 @@ class ObsForgeCycleProcessor:
             "jcb_obs_types": jcb_obs_types,
             "obsforge_root": self.obsforge_comroot,
             "obs_categories": sorted(obs_categories),
+            # templated options
+            "jedi_root": self.jedi_root,
+            "socascratch": self.socascratch,
         }
 
         # Load and render template
@@ -608,6 +657,12 @@ class ObsForgeCycleProcessor:
                     "  Job Card: Not generated (no observations)"
                 )
 
+            # Status log presence
+            if cycle_data.get("status_log_missing"):
+                report_lines.append("  Status log: Missing")
+            else:
+                report_lines.append("  Status log: Present")
+
             # Execution status
             if execution:
                 status = execution.get("status", "unknown")
@@ -720,6 +775,11 @@ class ObsForgeCycleProcessor:
                 lines.append(
                     "**Job Card:** Not generated (no observations)"
                 )
+            # Status log presence
+            if cycle_data.get("status_log_missing"):
+                lines.append("**Status Log:** Missing")
+            else:
+                lines.append("**Status Log:** Present")
             if execution:
                 status = execution.get("status", "unknown")
                 execution_mode = execution.get(
@@ -792,6 +852,112 @@ class ObsForgeCycleProcessor:
             "GFS Cycle Status Report",
         )
 
+    def write_failed_cycles_summary(
+        self, summary: Dict[str, Any], output_dir: Path
+    ) -> None:
+        """
+        Write a markdown summary of failed cycles to a separate file.
+
+        Includes:
+        - Execution failures (status == 'failed')
+        - Processing anomalies (observations present but no job card)
+        - Missing status log
+        """
+        cycles = summary.get("cycles", [])
+        exec_results = summary.get("execution_results", [])
+
+        # Collect failed execution cycles (from execution_results if available)
+        failed_exec = []
+        if exec_results:
+            failed_exec = [
+                r for r in exec_results if r.get("status") == "failed"
+            ]
+
+        # Collect processing anomalies and missing status log
+        processing_anomalies = []
+        no_observations = []
+        missing_status = []
+        for c in cycles:
+            has_obs = bool(c.get("observations", {}))
+            has_job = c.get("job_card") is not None
+            if has_obs and not has_job:
+                processing_anomalies.append(c)
+            if not has_obs:
+                no_observations.append(c)
+            if c.get("status_log_missing"):
+                missing_status.append(c)
+
+        report_path = output_dir / "failed_cycles_report.md"
+        with open(report_path, "w") as f:
+            f.write("# Failed Cycles Summary\n\n")
+            f.write(
+                f"Total cycles found: {summary.get('total_cycles', 0)}\n\n"
+            )
+
+            f.write(f"- Execution failures: {len(failed_exec)}\n")
+            f.write(
+                "- Processing anomalies (obs present, no job card): "
+                f"{len(processing_anomalies)}\n"
+            )
+            f.write(
+                f"- No observations found: {len(no_observations)}\n"
+            )
+            f.write(
+                f"- Missing status log: {len(missing_status)}\n\n"
+            )
+
+            if failed_exec:
+                f.write("## Execution Failures\n\n")
+                for r in failed_exec:
+                    cycle = r.get("cycle", "unknown cycle")
+                    mode = r.get("execution_mode", "unknown")
+                    err = r.get("error") or (r.get("stderr") or "")
+                    err = (err or "").strip()
+                    if len(err) > 400:
+                        err = err[:400] + "..."
+                    f.write(f"- {cycle} ({mode})\n")
+                    if err:
+                        f.write(f"  - Error: {err}\n")
+                f.write("\n")
+
+            if processing_anomalies:
+                f.write("## Processing Anomalies\n\n")
+                for c in sorted(
+                    processing_anomalies,
+                    key=lambda x: x.get("cycle", ""),
+                ):
+                    cycle = c.get("cycle", "unknown cycle")
+                    f.write(
+                        "- {cycle}: observations found but no job card "
+                        "generated\n".format(cycle=cycle)
+                    )
+                f.write("\n")
+
+            if no_observations:
+                f.write("## No Observations Found\n\n")
+                for c in sorted(
+                    no_observations, key=lambda x: x.get("cycle", "")
+                ):
+                    cycle = c.get("cycle", "unknown cycle")
+                    f.write(f"- {cycle}\n")
+                f.write("\n")
+
+            if missing_status:
+                f.write("## Missing Status Log\n\n")
+                for c in sorted(
+                    missing_status, key=lambda x: x.get("cycle", "")
+                ):
+                    cycle = c.get("cycle", "unknown cycle")
+                    f.write(f"- {cycle}\n")
+                f.write("\n")
+
+        self.logger.info(
+            f"Failed cycles summary written to {report_path}"
+        )
+        print(
+            f"Failed cycles summary written to: {report_path.resolve()}"
+        )
+
     def _get_cycle_status_icon(
         self, cycle_data: Dict[str, Any], execution: Dict[str, Any]
     ) -> str:
@@ -804,14 +970,16 @@ class ObsForgeCycleProcessor:
         YELLOW = "\033[93m"  # Bright yellow
         RESET = "\033[0m"  # Reset to default color
 
+        # Treat missing status log as failure
+        if cycle_data.get("status_log_missing"):
+            return "❌"
         # Check if cycle was processed successfully
         has_observations = bool(cycle_data.get("observations", {}))
         job_card_generated = cycle_data.get("job_card") is not None
 
-        # If no observations, it's a skipped cycle
+        # If no observations, it's a failed cycle
         if not has_observations:
             return "❌"
-
         # If observations exist but no job card, something went wrong
         if has_observations and not job_card_generated:
             return "❌"

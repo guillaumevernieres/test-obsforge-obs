@@ -2,9 +2,9 @@
 #SBATCH --job-name=3dvar_{{ cycle_name }}
 #SBATCH --output=3dvar_{{ cycle_name }}.%j.out
 #SBATCH --error=3dvar_{{ cycle_name }}.%j.err
-#SBATCH --time={{ job_time | default('02:00:00') }}
-#SBATCH --ntasks={{ ntasks | default(24) }}
-#SBATCH --partition={{ partition | default('analysis') }}
+#SBATCH --time={{ job_time | default('00:05:00') }}
+#SBATCH --ntasks={{ ntasks | default(16) }}
+#SBATCH --account=da-cpu
 
 # Marine 3DVAR job for {{ cycle_name }}
 # Generated observations: {{ jcb_obs_types | join(', ') }}
@@ -53,10 +53,11 @@ echo "Starting 3DVAR for {{ cycle_name }} at $(date)"
 # Parameterized paths
 socascratch="{{ socascratch | default('/path/to/socascratch') }}"
 cp -r "$socascratch"/* .
-gdasbin="{{ gdasbin | default('${JEDI_BUILD}/bin/soca_var.x') }}"
-ln -sf "$gdasbin" .
-echo "Linking GDAS binary: $gdasbin"
-mpirun -np 2 soca_var.x $CONFIG_FILE > 3dvar_{{ cycle_name }}.log 2>&1
+gdasbin="{{ gdasbin | default('${JEDI_BUILD}/bin/gdas.x') }}"
+
+module use ${JEDI_BUILD}/modulefiles
+module load GDAS/ursa
+srun $gdasbin soca variational $CONFIG_FILE
 
 # Check for successful completion
 if [ $? -eq 0 ]; then

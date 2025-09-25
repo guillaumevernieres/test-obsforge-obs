@@ -18,11 +18,11 @@ obsforge_root/
 │   └── HH
 │       └── ocean
 │           ├── adt/
-│           │   ├── gdas.tHHz.rads_adt_3a.tm00.nc
-│           │   ├── gdas.tHHz.rads_adt_3b.tm00.nc
-│           │   ├── gdas.tHHz.rads_adt_c2.tm00.nc
-│           │   ├── gdas.tHHz.rads_adt_j3.tm00.nc
-│           │   └── gdas.tHHz.rads_adt_sa.tm00.nc
+│           │   ├── gdas.tHHz.rads_adt_3a.nc
+│           │   ├── gdas.tHHz.rads_adt_3b.nc
+│           │   ├── gdas.tHHz.rads_adt_c2.nc
+│           │   ├── gdas.tHHz.rads_adt_j3.nc
+│           │   └── gdas.tHHz.rads_adt_sa.nc
 │           ├── icec/
 │           ├── sss/
 │           └── sst/
@@ -50,7 +50,14 @@ obsforge_root/
 #### Command Line Interface
 
 ```bash
-python obsforge_cycle_processor.py --obsforge /path/to/obsforge_root --output-dir ./cycle_output
+# From repository root
+python ../apps/obsforge_cycle_processor.py \
+   --obsforge /path/to/obsforge/comroot \
+   --jcb-gdas-path ../jcb-gdas/ \
+   --cycle-type gdas \
+   --execution-mode bash \
+   --cycle-type gdas \
+   --date-range 20250815 20250815
 ```
 
 **Options:**
@@ -68,34 +75,29 @@ python obsforge_cycle_processor.py --obsforge /path/to/obsforge_root --output-di
 
 **Generate job cards only:**
 ```bash
-python obsforge_cycle_processor.py --obsforge /path/to/obsforge_root --output-dir ./output
+python apps/obsforge_cycle_processor.py --obsforge /path/to/obsforge_root --output-dir ./output
 ```
 
 **Generate and execute via SLURM:**
 ```bash
-# Generate job cards and execute via SLURM
-python obsforge_cycle_processor.py --obsforge /path/to/obsforge_root --output-dir ./output --execution-mode sbatch
+python apps/obsforge_cycle_processor.py --obsforge /path/to/obsforge_root --output-dir ./output --execution-mode sbatch
 ```
 
 **Generate and execute directly in bash:**
 ```bash
-# Generate job cards and execute directly in bash
-python obsforge_cycle_processor.py --obsforge /path/to/obsforge_root --output-dir ./output --execution-mode bash
+python apps/obsforge_cycle_processor.py --obsforge /path/to/obsforge_root --output-dir ./output --execution-mode bash
 ```
 
 **Generate detailed status report:**
 ```bash
-# Basic processing with detailed status report
-python obsforge_cycle_processor.py --obsforge /path/to/obsforge_root --output-dir ./output --status-report
-
-# Execute and generate detailed status report
-python obsforge_cycle_processor.py --obsforge /path/to/obsforge_root --output-dir ./output --execution-mode bash --status-report
+python apps/obsforge_cycle_processor.py --obsforge /path/to/obsforge_root --output-dir ./output --status-report
+python apps/obsforge_cycle_processor.py --obsforge /path/to/obsforge_root --output-dir ./output --execution-mode bash --status-report
 ```
 
 #### Programmatic Usage
 
 ```python
-from obsforge_cycle_processor import ObsForgeCycleProcessor
+from src.obsforge_cycle_processor import ObsForgeCycleProcessor
 
 processor = ObsForgeCycleProcessor(
     obsforge_comroot="/path/to/obsforge_root",
@@ -110,6 +112,8 @@ summary = processor.process_all_cycles()
 # Process specific cycle
 result = processor.process_cycle('gdas', '20210831', '18')
 ```
+
+> Note: When importing programmatically, ensure your working directory is the repository root so that the `src` package is importable, or add the project root to `PYTHONPATH`.
 
 ### Generated Files
 
@@ -187,11 +191,12 @@ Execution Summary:
 #### Status Report
 When using `--status-report`, the application generates a comprehensive status report organized per cycle, showing:
 
-- **Visual status indicators**: Color-coded symbols for quick status identification
-  - 🟢 **Green checkmarks (✓)**: Successfully processed and/or executed cycles
-  - 🔴 **Red crosses (✗)**: Failed processing or execution
-  - 🟡 **Yellow circles (○)**: Skipped or empty cycles
-  - 🟡 **Yellow clocks (⧗)**: Submitted jobs pending execution
+- **Visual status indicators**: Symbols (with ANSI colors in terminal) for quick status identification
+  - ✅ Completed execution
+  - ✓ Successfully processed (job card generated; no execution info)
+  - ❌ Failed processing or execution
+  - ○ Skipped or empty cycles
+  - ⏳ Submitted jobs pending execution
 - **Complete observation file listings**: Shows ALL observation files found (not just a summary)
 - **JCB types for assimilation**: Mapped observation types for the JEDI configuration
 - **Job card generation status**: Whether job cards were successfully created
@@ -276,7 +281,9 @@ The application automatically maps obsForge observation files to JCB-GDAS templa
 | sst | `*modis*` | `sst_modis_l3u` |
 | sss | `*smap*` | `sss_smap_l2` |
 | sss | `*smos*` | `sss_smos_l3` |
-| icec | `*` | `icec_generic` |
+| icec | `*` | varies by dataset |
+
+> Note: Ice concentration mapping depends on the available JCB templates; ensure the corresponding template exists in your JCB-GDAS repo.
 
 ### Example Output
 
@@ -323,10 +330,10 @@ cost_function:
         name: "rads_adt_3a"
         # ... (configuration from JCB template)
     - obs space:
-        name: "sst_viirs_npp_l3u"
+        name: "sst_viirs_npp"
         # ... (configuration from JCB template)
     - obs space:
-        name: "sss_smap_l2"
+        name: "sss_smap"
         # ... (configuration from JCB template)
 
 output:
@@ -345,21 +352,11 @@ output:
 
 ### Testing
 
-Run the comprehensive test suite:
+Run the test suite:
 
 ```bash
-python -m pytest tests/test_obsforge_cycle_processor.py -v
+python -m pytest -v
 ```
-
-### Demo
-
-Run the demonstration script:
-
-```bash
-python example_obsforge_processor.py
-```
-
-This creates a mock obsForge directory structure and demonstrates the complete workflow.
 
 ## Future Enhancements
 

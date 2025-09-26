@@ -57,7 +57,9 @@ python ../apps/obsforge_cycle_processor.py \
    --cycle-type gdas \
    --execution-mode bash \
    --cycle-type gdas \
-   --date-range 20250815 20250815
+   --date-range 20250815 20250815 \
+   --socascratch /home/gvernier/sandboxes/jedi-bundle-new/socascratch
+   --jedi-root /home/gvernier/sandboxes/jedi-bundle-new
 ```
 
 **Options:**

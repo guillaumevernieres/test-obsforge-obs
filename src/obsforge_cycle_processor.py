@@ -290,7 +290,7 @@ class ObsForgeCycleProcessor:
         available_templates: List[str] = []
         for obs_file in obs_file_list:
             available_templates.append(
-                f"{obs_file.split('.')[3]}.yaml.j2"
+                os.path.basename(obs_file).split('.')[3] + ".yaml.j2"
             )
 
         jcb_templates_dir = (

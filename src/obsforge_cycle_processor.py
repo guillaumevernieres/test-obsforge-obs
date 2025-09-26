@@ -310,12 +310,14 @@ class ObsForgeCycleProcessor:
 
         # Pre-render each observer template to a YAML block string
         rendered_observer_blocks: List[str] = []
+        print('############# available_templates:')
+        print(available_templates)
         for name in available_templates:
             # Explicitly check presence in JCB-GDAS templates dir
             jcb_template_path = Path(jcb_templates_dir) / name
             if not jcb_template_path.exists():
                 self.logger.warning(
-                    "Missing JCB-GDAS template in %s: %s (skipping)",
+                    f"-- {name} template is missing JCB-GDAS template in %s: %s (skipping)",
                     str(jcb_templates_dir),
                     name,
                 )

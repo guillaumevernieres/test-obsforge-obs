@@ -7,7 +7,7 @@
 #SBATCH --account=da-cpu
 
 
-outputdir="{{ cycle_type }}_obs_validation_{{ date_start }}-{{ date_end }}"
+outputdir={{ cycle_type }}_obs_validation_{{ date_start }}-{{ date_end }}
 socascratch="{{ socascratch | default('/scratch3/NCEPDEV/da/Guillaume.Vernieres/socascratch') }}"
 jedi_root="{{ jedi_root | default('/scratch3/NCEPDEV/da/Guillaume.Vernieres/sandboxes/global-workflow/sorc/gdas.cd') }}"
 obsforge_db="{{ obsforge_db | default('/scratch3/NCEPDEV/da/common_obsForge') }}"
@@ -23,4 +23,4 @@ python {{ home_obsforge_validate }}/apps/obsforge_cycle_processor.py \
       --date-range {{ date_start }} {{ date_end }} \
       --jedi-root ${jedi_root} \
       --socascratch ${socascratch} \
-      --output-dir ${outputdir} \
+      --output-dir ${outputdir}

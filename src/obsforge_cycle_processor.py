@@ -311,6 +311,16 @@ class ObsForgeCycleProcessor:
         # Pre-render each observer template to a YAML block string
         rendered_observer_blocks: List[str] = []
         for name in available_templates:
+            # Explicitly check presence in JCB-GDAS templates dir
+            jcb_template_path = Path(jcb_templates_dir) / name
+            if not jcb_template_path.exists():
+                self.logger.warning(
+                    "Missing JCB-GDAS template in %s: %s (skipping)",
+                    str(jcb_templates_dir),
+                    name,
+                )
+                continue
+
             observer_name = name.replace(".yaml.j2", "")
             marine_obsdatain_path = "."
             marine_obsdatain_prefix = f"{cycle_type}.t{hour}z."

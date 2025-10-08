@@ -116,16 +116,12 @@ def generate_markdown_report(
         if successful:
             f.write("## ✅ Successful Jobs\n\n")
             for result in sorted(successful, key=lambda x: x['cycle']):
-                f.write(f"- **{result['cycle']}**\n")
-                f.write(f"  - Output: `{result['output_file']}`\n")
-                f.write(f"  - Status: {result['details']}\n\n")
+                f.write(f"- {result['cycle']}\n")
 
         if failed:
             f.write("## ❌ Failed Jobs\n\n")
             for result in sorted(failed, key=lambda x: x['cycle']):
-                f.write(f"- **{result['cycle']}**\n")
-                f.write(f"  - Output: `{result['output_file']}`\n")
-                f.write(f"  - Status: {result['details']}\n\n")
+                f.write(f"- {result['cycle']}\n")
 
         if not results:
             f.write("## No job output files found\n\n")

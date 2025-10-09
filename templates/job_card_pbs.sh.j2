@@ -60,7 +60,7 @@ gdasbin="{{ gdasbin | default('${JEDI_BUILD}/bin/gdas.x') }}"
 
 module use ${JEDI_BUILD}/modulefiles
 module load GDAS/{{ hpc_modules | default('ursa') }}
-mpirun -np $PBS_NCPUS $gdasbin soca variational $CONFIG_FILE > var.out
+srun -n $PBS_NCPUS $gdasbin soca variational $CONFIG_FILE > var.out
 
 # Check for successful completion
 if [ $? -eq 0 ]; then

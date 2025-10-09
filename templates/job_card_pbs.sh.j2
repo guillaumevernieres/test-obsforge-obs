@@ -58,7 +58,7 @@ socascratch="{{ socascratch | default('/path/to/socascratch') }}"
 cp -r "$socascratch"/* .
 gdasbin="{{ gdasbin | default('${JEDI_BUILD}/bin/gdas.x') }}"
 
-module use ${JEDI_BUILD}/modulefiles
+module use ${JEDI_ROOT}/modulefiles
 module load GDAS/{{ hpc_modules | default('ursa') }}
 srun -n $PBS_NCPUS $gdasbin soca variational $CONFIG_FILE > var.out
 

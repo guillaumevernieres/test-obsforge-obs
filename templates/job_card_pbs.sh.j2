@@ -5,7 +5,7 @@
 #PBS -l walltime={{ job_time | default('00:05:00') }}
 #PBS -l select=1:ncpus={{ ntasks | default(32) }}
 #PBS -A {{ account | default('da-cpu') }}
-
+#PBS -q {{ queue | default('dev') }}
 # Marine 3DVAR job for {{ cycle_name }}
 # Generated observations: {{ jcb_obs_types | join(', ') }}
 
@@ -59,7 +59,7 @@ cp -r "$socascratch"/* .
 gdasbin="{{ gdasbin | default('${JEDI_BUILD}/bin/gdas.x') }}"
 
 module use ${JEDI_ROOT}/modulefiles
-module load GDAS/{{ hpc_modules | default('ursa') }}
+module load GDAS/{{ hpc_modules | default('wcoss2.intel') }}
 srun -n $PBS_NCPUS $gdasbin soca variational $CONFIG_FILE > var.out
 
 # Check for successful completion

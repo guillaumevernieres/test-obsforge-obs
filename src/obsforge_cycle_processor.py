@@ -56,7 +56,9 @@ class ObsForgeCycleProcessor:
         self.logger = logging.getLogger(__name__)
         self.scanner = ObsForgeScanner(obsforge_comroot, self.logger)
 
-    def process_all_cycles(self) -> Dict[str, Any]:
+    def process_all_cycles(
+        self, execution_mode: str = "sbatch"
+    ) -> Dict[str, Any]:
         """
         Process all available cycles and generate job cards and configs.
 
@@ -72,7 +74,9 @@ class ObsForgeCycleProcessor:
 
         for cycle_type, date, hour in cycles:
             try:
-                result = self.process_cycle(cycle_type, date, hour)
+                result = self.process_cycle(
+                    cycle_type, date, hour, execution_mode
+                )
                 processed_cycles.append(result)
                 self.logger.info(
                     "Successfully processed %s.%s.%s",
@@ -119,7 +123,11 @@ class ObsForgeCycleProcessor:
         return summary
 
     def process_cycle(
-        self, cycle_type: str, date: str, hour: str
+        self,
+        cycle_type: str,
+        date: str,
+        hour: str,
+        execution_mode: str = "sbatch"
     ) -> Dict[str, Any]:
         """
         Process a single cycle and generate job card and config.
@@ -176,7 +184,7 @@ class ObsForgeCycleProcessor:
 
         # Generate job card
         job_card_path = self._generate_job_card(
-            cycle_type, date, hour, jcb_obs_types
+            cycle_type, date, hour, jcb_obs_types, execution_mode
         )
 
         # Generate 3DVAR configuration
@@ -200,6 +208,7 @@ class ObsForgeCycleProcessor:
         date: str,
         hour: str,
         jcb_obs_types: List[str],
+        execution_mode: str = "sbatch",
     ) -> Path:
         """Generate a job card script for the cycle."""
         cycle_name = f"{cycle_type}.{date}.{hour}"
@@ -227,8 +236,14 @@ class ObsForgeCycleProcessor:
             "socascratch": self.socascratch,
         }
 
+        # Select appropriate template based on execution mode
+        if execution_mode == "qsub":
+            template_name = "job_card_pbs.sh.j2"
+        else:
+            template_name = "job_card.sh.j2"  # Default to SLURM template
+
         # Load and render template
-        template = self.jinja_env.get_template("job_card.sh.j2")
+        template = self.jinja_env.get_template(template_name)
         job_card_content = template.render(**template_context)
 
         # Write job card
@@ -596,7 +611,9 @@ class ObsForgeCycleProcessor:
         Process a cycle and optionally execute the generated job card.
         """
         # First process the cycle normally
-        process_result = self.process_cycle(cycle_type, date, hour)
+        process_result = self.process_cycle(
+            cycle_type, date, hour, execution_mode
+        )
 
         # If processing was successful and job card was created, execute it
         if process_result["job_card"] is not None:

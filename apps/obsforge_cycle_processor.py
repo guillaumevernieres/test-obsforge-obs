@@ -108,10 +108,20 @@ def main():
     parser.add_argument(
         '--execution-mode',
         choices=['sbatch', 'bash', 'qsub'],
+        default=None,
         help=(
             'Execute generated job cards: sbatch for SLURM submission, '
             'qsub for PBS submission, or bash for direct execution. '
             'If not specified, only generate job cards without executing them.'
+        )
+    )
+    parser.add_argument(
+        '--scheduler',
+        choices=['slurm', 'pbs'],
+        default='slurm',
+        help=(
+            'Scheduler type for job card templates: slurm for SLURM/sbatch '
+            'templates, pbs for PBS/qsub templates (default: slurm)'
         )
     )
     parser.add_argument(
@@ -139,57 +149,71 @@ def main():
         # Process cycles
         logger.info("Starting obsForge cycle processing")
 
-        if args.execution_mode:
-            # Process and execute cycles
-            if args.cycle_type == 'both':
-                cycle_types = ['gfs', 'gdas']
-            else:
-                cycle_types = [args.cycle_type]
-            date_range = args.date_range if args.date_range else None
-            cycles = processor.scanner.find_cycles(
-                cycle_types=cycle_types,
-                start_date=date_range[0],
-                end_date=date_range[1]
-            )
-            processed_cycles = []
-            execution_results = []
+        # Determine scheduler type for template selection
+        if args.execution_mode == 'qsub':
+            scheduler = 'pbs'
+        elif args.execution_mode in ['sbatch', 'bash']:
+            scheduler = 'slurm'
+        else:
+            scheduler = args.scheduler
 
-            logger.info(
-                f"Found {len(cycles)} cycles to process and execute"
-            )
+        # Map scheduler to template mode
+        template_mode = 'qsub' if scheduler == 'pbs' else 'sbatch'
 
-            for cycle_type, date, hour in cycles:
-                try:
+        # Determine cycle processing scope
+        if args.cycle_type == 'both':
+            cycle_types = ['gfs', 'gdas']
+        else:
+            cycle_types = [args.cycle_type]
+
+        date_range = args.date_range if args.date_range else None
+        cycles = processor.scanner.find_cycles(
+            cycle_types=cycle_types,
+            start_date=date_range[0] if date_range else None,
+            end_date=date_range[1] if date_range else None
+        )
+
+        processed_cycles = []
+        execution_results = []
+
+        logger.info(f"Found {len(cycles)} cycles to process")
+
+        for cycle_type, date, hour in cycles:
+            try:
+                if args.execution_mode:
+                    # Process and execute
                     result = processor.process_and_execute_cycle(
                         cycle_type, date, hour, args.execution_mode
                     )
-                    processed_cycles.append(result)
-
-                    if 'execution' in result:
-                        execution_results.append(result['execution'])
-
-                    msg = (
-                        f"Successfully processed and executed "
-                        f"{cycle_type}.{date}.{hour}"
+                else:
+                    # Process only, but use correct template
+                    result = processor.process_cycle(
+                        cycle_type, date, hour, template_mode
                     )
-                    logger.info(msg)
-                except Exception as e:
-                    msg = (
-                        f"Failed to process {cycle_type}.{date}.{hour}: {e}"
-                    )
-                    logger.error(msg)
-                    continue
 
-            summary = {
-                'total_cycles': len(cycles),
-                'processed_cycles': len(processed_cycles),
-                'failed_cycles': len(cycles) - len(processed_cycles),
-                'cycles': processed_cycles,
-                'execution_results': execution_results
-            }
-        else:
-            # Process only (no execution)
-            summary = processor.process_all_cycles()
+                processed_cycles.append(result)
+
+                if 'execution' in result:
+                    execution_results.append(result['execution'])
+
+                msg = (
+                    f"Successfully processed {cycle_type}.{date}.{hour}"
+                )
+                logger.info(msg)
+            except Exception as e:
+                msg = (
+                    f"Failed to process {cycle_type}.{date}.{hour}: {e}"
+                )
+                logger.error(msg)
+                continue
+
+        summary = {
+            'total_cycles': len(cycles),
+            'processed_cycles': len(processed_cycles),
+            'failed_cycles': len(cycles) - len(processed_cycles),
+            'cycles': processed_cycles,
+            'execution_results': execution_results
+        }
 
         # Print summary
         if args.status_report:

@@ -316,7 +316,8 @@ class ObsForgeCycleProcessor:
             jcb_template_path = Path(jcb_templates_dir) / name
             if not jcb_template_path.exists():
                 self.logger.warning(
-                    f"-- {name} template is missing JCB-GDAS template in %s: %s (skipping)",
+                    f"-- {name} template is missing JCB-GDAS template in "
+                    f"%s: %s (skipping)",
                     str(jcb_templates_dir),
                     name,
                 )
@@ -369,7 +370,7 @@ class ObsForgeCycleProcessor:
         self, job_card_path: Path, execution_mode: str = "sbatch"
     ) -> Dict[str, Any]:
         """
-        Execute a job card either via sbatch or directly in terminal.
+        Execute a job card via sbatch, qsub, or directly in terminal.
         """
         if not job_card_path.exists():
             raise FileNotFoundError(f"Job card not found: {job_card_path}")
@@ -378,13 +379,15 @@ class ObsForgeCycleProcessor:
 
         if execution_mode == "sbatch":
             return self._submit_to_slurm(job_card_path, cycle_name)
+        elif execution_mode == "qsub":
+            return self._submit_to_pbs(job_card_path, cycle_name)
         elif execution_mode == "bash":
             return self._run_directly(job_card_path, cycle_name)
         else:
             raise ValueError(
                 (
                     f"Invalid execution mode: {execution_mode}. "
-                    "Use 'sbatch' or 'bash'"
+                    "Use 'sbatch', 'qsub', or 'bash'"
                 )
             )
 
@@ -454,6 +457,72 @@ class ObsForgeCycleProcessor:
             return {
                 "cycle": cycle_name,
                 "execution_mode": "sbatch",
+                "status": "failed",
+                "job_id": None,
+                "error": error_msg,
+            }
+        finally:
+            os.chdir(original_cwd)
+
+    def _submit_to_pbs(
+        self, job_card_path: Path, cycle_name: str
+    ) -> Dict[str, Any]:
+        """Submit job card to PBS scheduler."""
+        try:
+            # Change to the job card directory for execution
+            original_cwd = Path.cwd()
+            job_dir = job_card_path.parent
+            os.chdir(job_dir)
+
+            # Submit job
+            result = subprocess.run(
+                ["qsub", str(job_card_path.name)],
+                capture_output=True,
+                text=True,
+                check=True,
+            )
+
+            # Parse job ID from qsub output (PBS returns just the job ID)
+            job_id: Optional[str] = None
+            if result.stdout:
+                job_id = result.stdout.strip()
+
+            self.logger.info(
+                "Submitted %s to PBS: %s",
+                cycle_name,
+                job_id or "No job ID returned",
+            )
+
+            return {
+                "cycle": cycle_name,
+                "execution_mode": "qsub",
+                "status": "submitted",
+                "job_id": job_id,
+                "stdout": result.stdout,
+                "stderr": result.stderr,
+            }
+
+        except subprocess.CalledProcessError as e:
+            self.logger.error(
+                f"Failed to submit {cycle_name}: {e.stderr}"
+            )
+            return {
+                "cycle": cycle_name,
+                "execution_mode": "qsub",
+                "status": "failed",
+                "job_id": None,
+                "stdout": e.stdout,
+                "stderr": e.stderr,
+                "error": str(e),
+            }
+        except FileNotFoundError:
+            error_msg = (
+                "qsub command not found. Is PBS installed?"
+            )
+            self.logger.error(error_msg)
+            return {
+                "cycle": cycle_name,
+                "execution_mode": "qsub",
                 "status": "failed",
                 "job_id": None,
                 "error": error_msg,
@@ -602,7 +671,7 @@ class ObsForgeCycleProcessor:
             )
 
             report_lines.append("\nEXECUTION SUMMARY:")
-            report_lines.append(f"  Jobs submitted to SLURM: {submitted}")
+            report_lines.append(f"  Jobs submitted to schedulers: {submitted}")
             report_lines.append(f"  Jobs completed directly: {completed}")
             report_lines.append(f"  Jobs failed to execute: {failed_exec}")
             report_lines.append(f"  Jobs skipped (no observations): {skipped}")
@@ -683,8 +752,17 @@ class ObsForgeCycleProcessor:
 
                 if status == "submitted":
                     job_id = execution.get("job_id")
+                    execution_mode = execution.get("execution_mode",
+                                                   "scheduler")
+                    if execution_mode == "sbatch":
+                        scheduler = "SLURM"
+                    elif execution_mode == "qsub":
+                        scheduler = "PBS"
+                    else:
+                        scheduler = execution_mode.upper()
                     exec_line = (
-                        f"  Execution: SUBMITTED to SLURM (Job ID: {job_id})"
+                        f"  Execution: SUBMITTED to {scheduler} "
+                        f"(Job ID: {job_id})"
                     )
                     report_lines.append(exec_line)
                 elif status == "completed":
@@ -798,8 +876,17 @@ class ObsForgeCycleProcessor:
                 )
                 if status == "submitted":
                     job_id = execution.get("job_id")
+                    execution_mode = execution.get("execution_mode",
+                                                   "scheduler")
+                    if execution_mode == "sbatch":
+                        scheduler = "SLURM"
+                    elif execution_mode == "qsub":
+                        scheduler = "PBS"
+                    else:
+                        scheduler = execution_mode.upper()
                     lines.append(
-                        f"**Execution:** SUBMITTED to SLURM (Job ID: {job_id})"
+                        f"**Execution:** SUBMITTED to {scheduler} "
+                        f"(Job ID: {job_id})"
                     )
                 elif status == "completed":
                     return_code = execution.get(

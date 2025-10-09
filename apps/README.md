@@ -69,7 +69,7 @@ python ../apps/obsforge_cycle_processor.py \
 - `--template-dir`: Path to custom templates (default: ../templates)
 - `--cycle-type`: Process only specific cycle type: gfs, gdas, or both (default: both)
 - `--date-range`: Process cycles in date range YYYYMMDD YYYYMMDD
-- `--execution-mode`: Execute generated job cards: sbatch for SLURM submission or bash for direct execution. If not specified, only generate job cards without executing them.
+- `--execution-mode`: Execute generated job cards: sbatch for SLURM submission, qsub for PBS submission, or bash for direct execution. If not specified, only generate job cards without executing them.
 - `--status-report`: Generate detailed status report organized per cycle
 - `--verbose`: Enable verbose logging
 
@@ -83,6 +83,11 @@ python apps/obsforge_cycle_processor.py --obsforge /path/to/obsforge_root --outp
 **Generate and execute via SLURM:**
 ```bash
 python apps/obsforge_cycle_processor.py --obsforge /path/to/obsforge_root --output-dir ./output --execution-mode sbatch
+```
+
+**Generate and execute via PBS:**
+```bash
+python apps/obsforge_cycle_processor.py --obsforge /path/to/obsforge_root --output-dir ./output --execution-mode qsub
 ```
 
 **Generate and execute directly in bash:**
@@ -163,10 +168,16 @@ The application can optionally execute the generated job cards using two modes:
 - Suitable for HPC environments with SLURM workload manager
 - Jobs run according to SLURM scheduling policies
 
+#### PBS Mode (`--execution-mode qsub`)
+- Submits job cards to PBS scheduler using `qsub`
+- Returns PBS job IDs for monitoring
+- Suitable for HPC environments with PBS/Torque workload manager
+- Jobs run according to PBS scheduling policies
+
 #### Direct Execution Mode (`--execution-mode bash`)
 - Runs job cards directly using `bash`
 - Executes immediately in the current session
-- Suitable for testing, development, or non-SLURM environments
+- Suitable for testing, development, or non-scheduler environments
 - Returns execution output and return codes
 
 #### Execution Results
@@ -179,15 +190,15 @@ When using `--execution-mode`, the application provides detailed execution infor
 **Example execution output:**
 ```
 Processing Summary:
-  Total cycles found: 2
-  Successfully processed: 2
+  Total cycles found: 4
+  Successfully processed: 4
   Failed: 0
 
 Execution Summary:
-  Jobs submitted to SLURM: 2
+  Jobs submitted to schedulers: 4
   Jobs completed directly: 0
   Jobs failed to execute: 0
-  SLURM Job IDs: 12345, 12346
+  Scheduler Job IDs: 12345, 12346, 1234567.hpc, 1234568.hpc
 ```
 
 #### Status Report
@@ -224,7 +235,7 @@ EXECUTION SUMMARY:
 DETAILED CYCLE STATUS:
 --------------------------------------------------------------------------------
 
-✓ Cycle: gdas.20240101.00
+✅ Cycle: gdas.20240101.00
   Observations Found:
     ADT: 5 files
       - rads_adt_j3_20240101_000000.nc
@@ -244,7 +255,22 @@ DETAILED CYCLE STATUS:
     - sst_modis_l3u
     - sst_avhrr_metop_l3u
   Job Card: Generated (job_gdas.20240101.00.sh)
+  Status Log: Present
   Execution: COMPLETED (bash, return code: 0)
+
+⏳ Cycle: gdas.20240101.06
+  Observations Found:
+    ADT: 3 files
+      - rads_adt_j3_20240101_060000.nc
+      - rads_adt_sa_20240101_060000.nc
+      - rads_adt_c2_20240101_060000.nc
+  JCB Types for Assimilation:
+    - rads_adt_j3
+    - rads_adt_sa
+    - rads_adt_c2
+  Job Card: Generated (job_gdas.20240101.06.sh)
+  Status Log: Present
+  Execution: SUBMITTED to PBS (Job ID: 1234567.hpc)
 
 ○ Cycle: gfs.20240101.00
   Observations Found: None
@@ -370,3 +396,91 @@ Potential improvements for the obsForge cycle processor:
 4. **Quality control**: Add observation quality filtering
 5. **Monitoring integration**: Add job status monitoring and notifications
 6. **Archive integration**: Support for HPSS or other archive systems
+
+## Multi-Scheduler Drivers
+
+### SLURM Driver (`sbatch_driver.py`)
+
+Generate and submit SLURM batch jobs for obsForge validation:
+
+```bash
+python apps/sbatch_driver.py \
+  --date-start 20250815 \
+  --date-end 20250815 \
+  --cycle-type gdas \
+  --outputdir ./slurm_results \
+  --socascratch /path/to/scratch \
+  --jedi-root /path/to/jedi
+```
+
+**Options:**
+- `--date-start`, `--date-end`: Date range (YYYYMMDD format)
+- `--cycle-type`: gfs or gdas
+- `--outputdir`: Output directory for results
+- `--socascratch`: Path to SOCA scratch directory
+- `--jedi-root`: Path to JEDI installation
+- `--obsforge-db`: Path to obsForge database
+
+### PBS Driver (`pbs_driver.py`)
+
+Generate and submit PBS batch jobs for obsForge validation:
+
+```bash
+python apps/pbs_driver.py \
+  --date-start 20250815 \
+  --date-end 20250815 \
+  --cycle-type gdas \
+  --outputdir ./pbs_results \
+  --account da-cpu \
+  --queue normal \
+  --job-time 02:00:00 \
+  --ntasks 8
+```
+
+**Additional PBS Options:**
+- `--account`: PBS account/project
+- `--queue`: PBS queue name
+- `--job-time`: Job walltime (HH:MM:SS)
+- `--ntasks`: Number of tasks/cores
+
+## Job Status Monitoring
+
+### SLURM Job Checker (`check_slurm_jobs.py`)
+
+Monitor SLURM job completion and generate status reports:
+
+```bash
+python apps/check_slurm_jobs.py \
+  --directory ./slurm_results \
+  --output slurm_status.md \
+  --verbose
+```
+
+**Features:**
+- Parses SLURM output files (*.out format)
+- Extracts job completion status and errors
+- Generates markdown status summaries
+- Supports verbose logging
+
+### PBS Job Checker (`check_pbs_jobs.py`)
+
+Monitor PBS job completion and generate status reports:
+
+```bash
+python apps/check_pbs_jobs.py \
+  --directory ./pbs_results \
+  --output pbs_status.md \
+  --verbose
+```
+
+**Features:**
+- Parses PBS output files (*.o* format)
+- Extracts job completion status and exit codes
+- Generates markdown status summaries
+- Handles PBS-specific job output formats
+
+**Example PBS status output:**
+```
+PBS Job Status: 3 completed, 1 failed, 0 running
+Detailed report written to: /path/to/pbs_status.md
+```

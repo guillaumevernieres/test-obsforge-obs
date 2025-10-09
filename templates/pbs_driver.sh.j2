@@ -1,0 +1,26 @@
+#!/bin/bash
+#PBS -N obsForgeValidate_{{ date_start }}_to_{{ date_end }}
+#PBS -o obsForgeValidate_{{ date_start }}_to_{{ date_end }}.%j.out
+#PBS -e obsForgeValidate_{{ date_start }}_to_{{ date_end }}.%j.err
+#PBS -l walltime={{ job_time | default('00:05:00') }}
+#PBS -l ncpus={{ ntasks | default(4) }}
+#PBS -P {{ account | default('da-cpu') }}
+#PBS -q {{ queue | default('normal') }}
+
+# Change to PBS working directory
+cd $PBS_O_WORKDIR
+
+outputdir="{{ outputdir }}"
+socascratch="{{ socascratch | default('/scratch/da/Guillaume.Vernieres/socascratch') }}"
+jedi_root="{{ jedi_root | default('/scratch/da/Guillaume.Vernieres/sandboxes/global-workflow/sorc/gdas.cd') }}"
+obsforge_db="{{ obsforge_db | default('/scratch/da/common_obsForge') }}"
+
+python {{ home_obsforge_validate }}/apps/obsforge_cycle_processor.py \
+      --obsforge ${obsforge_db} \
+      --jcb-gdas-path {{ home_obsforge_validate }}/jcb-gdas/ \
+      --cycle-type {{ cycle_type }} \
+      --execution-mode bash \
+      --date-range {{ date_start }} {{ date_end }} \
+      --jedi-root ${jedi_root} \
+      --socascratch ${socascratch} \
+      --output-dir ${outputdir} \

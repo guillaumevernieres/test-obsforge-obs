@@ -107,11 +107,11 @@ def main():
     )
     parser.add_argument(
         '--execution-mode',
-        choices=['sbatch', 'bash'],
+        choices=['sbatch', 'bash', 'qsub'],
         help=(
-            'Execute generated job cards: sbatch for SLURM submission or '
-            'bash for direct execution. If not specified, only generate '
-            'job cards without executing them.'
+            'Execute generated job cards: sbatch for SLURM submission, '
+            'qsub for PBS submission, or bash for direct execution. '
+            'If not specified, only generate job cards without executing them.'
         )
     )
     parser.add_argument(
@@ -218,19 +218,19 @@ def main():
                     if r.get('status') == 'failed'
                 ])
 
-                print("\nExecution Summary:")
-                print(f"  Jobs submitted to SLURM: {submitted}")
-                print(f"  Jobs completed directly: {completed}")
-                print(f"  Jobs failed to execute: {failed_exec}")
+            print("\nExecution Summary:")
+            print(f"  Jobs submitted to schedulers: {submitted}")
+            print(f"  Jobs completed directly: {completed}")
+            print(f"  Jobs failed to execute: {failed_exec}")
 
-                # Show job IDs for submitted jobs
-                job_ids = [
-                    r.get('job_id') for r in execution_results
-                    if r.get('job_id') is not None
-                ]
-                if job_ids:
-                    job_id_str = ', '.join(map(str, job_ids))
-                    print(f"  SLURM Job IDs: {job_id_str}")
+            # Show job IDs for submitted jobs
+            job_ids = [
+                r.get('job_id') for r in execution_results
+                if r.get('job_id') is not None
+            ]
+            if job_ids:
+                job_id_str = ', '.join(map(str, job_ids))
+                print(f"  Scheduler Job IDs: {job_id_str}")
 
         # Save summary to file
         summary_path = Path(args.output_dir) / 'processing_summary.yaml'

@@ -4,7 +4,7 @@
 #PBS -e 3dvar_{{ cycle_name }}.%j.err
 #PBS -l walltime={{ job_time | default('00:05:00') }}
 #PBS -l select=1:ncpus={{ ntasks | default(32) }}
-#PBS -A {{ account | default('da-cpu') }}
+#PBS -A {{ account | default('CDAS-DEV') }}
 #PBS -q {{ queue | default('dev') }}
 # Marine 3DVAR job for {{ cycle_name }}
 # Generated observations: {{ jcb_obs_types | join(', ') }}

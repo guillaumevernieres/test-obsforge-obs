@@ -23,6 +23,7 @@ class ObsForgeCycleProcessor:
         template_dir: str = "templates",
         jedi_root: Optional[str] = None,
         socascratch: Optional[str] = None,
+        hpc_modules: Optional[str] = None,
     ):
         """
         Initialize the cycle processor.
@@ -35,6 +36,7 @@ class ObsForgeCycleProcessor:
             jedi_root: Path to JEDI installation root (optional)
             socascratch: Path to SOCA scratch directory to seed run dir
                 (optional)
+            hpc_modules: HPC modules to load in job cards (optional)
         """
         self.obsforge_comroot = obsforge_comroot
         self.output_dir = Path(output_dir)
@@ -52,6 +54,7 @@ class ObsForgeCycleProcessor:
         # Optional JEDI root and SOCA scratch path
         self.jedi_root = jedi_root
         self.socascratch = socascratch
+        self.hpc_modules = hpc_modules
 
         self.logger = logging.getLogger(__name__)
         self.scanner = ObsForgeScanner(obsforge_comroot, self.logger)
@@ -234,6 +237,7 @@ class ObsForgeCycleProcessor:
             # templated options
             "jedi_root": self.jedi_root,
             "socascratch": self.socascratch,
+            "hpc_modules": self.hpc_modules,
         }
 
         # Select appropriate template based on execution mode

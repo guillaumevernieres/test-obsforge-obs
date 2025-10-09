@@ -89,6 +89,10 @@ def main():
         help='Path to SOCA scratch directory to seed the run directory'
     )
     parser.add_argument(
+        '--hpc-modules',
+        help='HPC modules to load in job cards (e.g., intel-impi/2018.0.4)'
+    )
+    parser.add_argument(
         '--cycle-type',
         choices=['gfs', 'gdas', 'both'],
         default='both',
@@ -144,6 +148,7 @@ def main():
             template_dir=args.template_dir,
             jedi_root=args.jedi_root,
             socascratch=args.socascratch,
+            hpc_modules=args.hpc_modules,
         )
 
         # Process cycles
